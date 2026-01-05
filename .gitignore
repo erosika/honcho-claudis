@@ -44,8 +44,8 @@ coverage/
 # Claude Code project instructions (user-specific)
 CLAUDE.md
 
-# Runtime data (user-specific, created at ~/.honcho-claudis/)
-# Note: The actual config/cache lives in ~/.honcho-claudis/, not in the repo
+# Runtime data (user-specific, created at ~/.honcho-clawd/)
+# Note: The actual config/cache lives in ~/.honcho-clawd/, not in the repo
 
 # Temporary files
 tmp/

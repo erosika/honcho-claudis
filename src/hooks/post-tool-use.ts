@@ -5,8 +5,10 @@ import {
   getCachedWorkspaceId,
   getCachedPeerId,
   getCachedSessionId,
-  appendClaudisWork,
+  appendClawdWork,
 } from "../cache.js";
+
+const WORKSPACE_APP_TAG = "honcho-clawd";
 
 interface HookInput {
   tool_name?: string;
@@ -94,9 +96,9 @@ export async function handlePostToolUse(): Promise<void> {
 
   const summary = formatToolSummary(toolName, toolInput, toolResponse);
 
-  // INSTANT: Update local claudis context file (~2ms)
-  // This gives claudis self-awareness even without Honcho
-  appendClaudisWork(summary);
+  // INSTANT: Update local clawd context file (~2ms)
+  // This gives clawd self-awareness even without Honcho
+  appendClawdWork(summary);
 
   // Fire-and-forget: Log to Honcho in background
   // Don't block on this - just let it happen
@@ -120,11 +122,14 @@ async function logToHonchoAsync(config: any, cwd: string, summary: string): Prom
   // Try to use cached IDs for speed
   let workspaceId = getCachedWorkspaceId(config.workspace);
   let sessionId = getCachedSessionId(cwd);
-  let claudisPeerId = getCachedPeerId(config.claudePeer);
+  let clawdPeerId = getCachedPeerId(config.claudePeer);
 
   // If we don't have cached IDs, do full setup
-  if (!workspaceId || !sessionId || !claudisPeerId) {
-    const workspace = await client.workspaces.getOrCreate({ id: config.workspace });
+  if (!workspaceId || !sessionId || !clawdPeerId) {
+    const workspace = await client.workspaces.getOrCreate({
+      id: config.workspace,
+      metadata: { app: WORKSPACE_APP_TAG },
+    });
     workspaceId = workspace.id;
 
     const sessionName = getSessionName(cwd);
@@ -134,8 +139,8 @@ async function logToHonchoAsync(config: any, cwd: string, summary: string): Prom
     });
     sessionId = session.id;
 
-    const claudisPeer = await client.workspaces.peers.getOrCreate(workspaceId, { id: config.claudePeer });
-    claudisPeerId = claudisPeer.id;
+    const clawdPeer = await client.workspaces.peers.getOrCreate(workspaceId, { id: config.claudePeer });
+    clawdPeerId = clawdPeer.id;
   }
 
   // Log the tool use

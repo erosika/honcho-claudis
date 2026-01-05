@@ -11,10 +11,12 @@ import {
   setCachedSessionId,
   getQueuedMessages,
   markMessagesUploaded,
-  generateClaudisSummary,
-  saveClaudisLocalContext,
-  loadClaudisLocalContext,
+  generateClawdSummary,
+  saveClawdLocalContext,
+  loadClawdLocalContext,
 } from "../cache.js";
+
+const WORKSPACE_APP_TAG = "honcho-clawd";
 
 interface HookInput {
   session_id?: string;
@@ -143,7 +145,10 @@ export async function handleSessionEnd(): Promise<void> {
     // Get or create workspace (use cache)
     let workspaceId = getCachedWorkspaceId(config.workspace);
     if (!workspaceId) {
-      const workspace = await client.workspaces.getOrCreate({ id: config.workspace });
+      const workspace = await client.workspaces.getOrCreate({
+        id: config.workspace,
+        metadata: { app: WORKSPACE_APP_TAG },
+      });
       workspaceId = workspace.id;
       setCachedWorkspaceId(config.workspace, workspaceId);
     }
@@ -162,16 +167,16 @@ export async function handleSessionEnd(): Promise<void> {
 
     // Ensure peers exist (use cache)
     let userPeerId = getCachedPeerId(config.peerName);
-    let claudisPeerId = getCachedPeerId(config.claudePeer);
+    let clawdPeerId = getCachedPeerId(config.claudePeer);
 
     if (!userPeerId) {
       const peer = await client.workspaces.peers.getOrCreate(workspaceId, { id: config.peerName });
       userPeerId = peer.id;
       setCachedPeerId(config.peerName, peer.id);
     }
-    if (!claudisPeerId) {
+    if (!clawdPeerId) {
       const peer = await client.workspaces.peers.getOrCreate(workspaceId, { id: config.claudePeer });
-      claudisPeerId = peer.id;
+      clawdPeerId = peer.id;
       setCachedPeerId(config.claudePeer, peer.id);
     }
 
@@ -195,12 +200,12 @@ export async function handleSessionEnd(): Promise<void> {
     // =====================================================
     let assistantMessages: Array<{ role: string; content: string }> = [];
     if (config.saveMessages !== false && transcriptMessages.length > 0) {
-      // Extract assistant prose (non-tool responses) for claudis peer
+      // Extract assistant prose (non-tool responses) for clawd peer
       assistantMessages = transcriptMessages
         .filter((msg) => msg.role === "assistant")
         .slice(-30);
 
-      // Upload assistant messages for claudis peer knowledge extraction
+      // Upload assistant messages for clawd peer knowledge extraction
       if (assistantMessages.length > 0) {
         const messagesToSend = assistantMessages.map((msg) => ({
           content: msg.content,
@@ -214,10 +219,10 @@ export async function handleSessionEnd(): Promise<void> {
     }
 
     // =====================================================
-    // Step 3: Generate and save claudis self-summary
+    // Step 3: Generate and save clawd self-summary
     // =====================================================
     const workItems = extractWorkItems(assistantMessages.map((m) => m.content));
-    const existingContext = loadClaudisLocalContext();
+    const existingContext = loadClawdLocalContext();
 
     // Preserve recent activity from existing context
     let recentActivity = "";
@@ -228,14 +233,14 @@ export async function handleSessionEnd(): Promise<void> {
       }
     }
 
-    const newSummary = generateClaudisSummary(
+    const newSummary = generateClawdSummary(
       sessionName,
       workItems,
       assistantMessages.map((m) => m.content)
     );
 
     // Append preserved activity
-    saveClaudisLocalContext(newSummary + recentActivity);
+    saveClawdLocalContext(newSummary + recentActivity);
 
     // =====================================================
     // Step 4: Log session end marker
@@ -249,10 +254,10 @@ export async function handleSessionEnd(): Promise<void> {
       ],
     });
 
-    console.log(`[honcho-claudis] Session saved: ${assistantMessages.length} assistant messages, ${queuedMessages.length} queued messages processed`);
+    console.log(`[honcho-clawd] Session saved: ${assistantMessages.length} assistant messages, ${queuedMessages.length} queued messages processed`);
     process.exit(0);
   } catch (error) {
-    console.error(`[honcho-claudis] Warning: ${error}`);
+    console.error(`[honcho-clawd] Warning: ${error}`);
     process.exit(1);
   }
 }

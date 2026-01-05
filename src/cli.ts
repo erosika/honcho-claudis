@@ -10,7 +10,7 @@ import {
   setSessionForPath,
   getAllSessions,
   removeSessionForPath,
-  type HonchoClaudisConfig,
+  type HonchoCLAWDConfig,
 } from "./config.js";
 import Honcho from "@honcho-ai/core";
 import { installHooks, uninstallHooks, checkHooksInstalled, verifyCommandAvailable, checkLegacyBinaries } from "./install.js";
@@ -20,6 +20,7 @@ import { handlePostToolUse } from "./hooks/post-tool-use.js";
 import { handleUserPrompt } from "./hooks/user-prompt.js";
 
 const VERSION = "0.1.0";
+const WORKSPACE_APP_TAG = "honcho-clawd"; // Used to identify honcho-clawd workspaces
 
 function prompt(question: string): Promise<string> {
   const rl = createInterface({
@@ -36,7 +37,7 @@ function prompt(question: string): Promise<string> {
 }
 
 async function init(): Promise<void> {
-  console.log("\nhoncho-claudis setup\n");
+  console.log("\nhoncho-clawd setup\n");
   console.log("This will configure persistent memory for Claude Code using Honcho.\n");
 
   // Check for existing config
@@ -50,29 +51,8 @@ async function init(): Promise<void> {
     }
   }
 
-  // Get user's peer name
-  console.log("\n--- Peer Configuration ---");
-  console.log("Your peer name is how Honcho identifies you across sessions.");
-  const peerName = await prompt("Enter your name/peer ID: ");
-  if (!peerName) {
-    console.error("Error: Peer name is required.");
-    process.exit(1);
-  }
-
-  // Get workspace name
-  const workspace = await prompt("Enter workspace name (default: collab): ") || "collab";
-
-  // Get Claude's peer name
-  const claudePeer = await prompt("Enter Claude's peer name (default: claudis): ") || "claudis";
-
-  // Ask about message saving
-  console.log("\n--- Message Saving ---");
-  console.log("Save conversation messages to Honcho for memory/context building.");
-  const saveMessagesInput = await prompt("Enable message saving? (Y/n): ");
-  const saveMessages = saveMessagesInput.toLowerCase() !== "n";
-
-  // Get API key
-  console.log("\n--- Honcho API Key ---");
+  // Step 1: API Key (needed to connect and discover existing resources)
+  console.log("--- Step 1: Honcho API Key ---");
   console.log("Get your API key from https://app.honcho.dev");
   const apiKey = await prompt("Enter your Honcho API key: ");
   if (!apiKey) {
@@ -80,8 +60,179 @@ async function init(): Promise<void> {
     process.exit(1);
   }
 
+  // Validate API key by connecting
+  const client = new Honcho({
+    apiKey,
+    environment: "production",
+  });
+
+  console.log("Connecting to Honcho...");
+
+  // Step 2: Workspace - Try to discover existing honcho-clawd workspaces first
+  console.log("\n--- Step 2: Workspace ---");
+  console.log("Workspaces group your sessions and peers together.");
+
+  let existingWorkspaces: Array<{ id: string; name: string; sessions: number }> = [];
+  try {
+    // Try to list workspaces (may not be available in all API versions)
+    const workspaces = await (client as any).workspaces.list();
+    if (workspaces && Array.isArray(workspaces)) {
+      // Filter to only show honcho-clawd tagged workspaces
+      for (const ws of workspaces) {
+        const metadata = (ws as any).metadata || {};
+        if (metadata.app === WORKSPACE_APP_TAG) {
+          let sessionCount = 0;
+          try {
+            const sessions = await client.workspaces.sessions.list(ws.id);
+            sessionCount = Array.isArray(sessions) ? sessions.length : 0;
+          } catch { /* ignore */ }
+          existingWorkspaces.push({ id: ws.id, name: ws.id, sessions: sessionCount });
+        }
+      }
+    }
+  } catch {
+    // workspaces.list may not be available, continue to manual entry
+  }
+
+  let workspace: string;
+  if (existingWorkspaces.length > 0) {
+    console.log(`\nExisting honcho-clawd workspaces found:`);
+    existingWorkspaces.forEach((ws, i) => console.log(`  ${i + 1}. ${ws.name} (${ws.sessions} session${ws.sessions === 1 ? '' : 's'})`));
+    console.log(`  ${existingWorkspaces.length + 1}. Create new workspace`);
+
+    const wsChoice = await prompt(`\nSelect workspace (1-${existingWorkspaces.length + 1}) or enter name: `);
+    const choiceNum = parseInt(wsChoice);
+
+    if (choiceNum > 0 && choiceNum <= existingWorkspaces.length) {
+      workspace = existingWorkspaces[choiceNum - 1].name;
+      console.log(`✓ Using existing workspace: ${workspace}`);
+    } else if (choiceNum === existingWorkspaces.length + 1 || !wsChoice) {
+      workspace = await prompt("Enter new workspace name (default: collab): ") || "collab";
+    } else {
+      // They typed a name directly
+      workspace = wsChoice;
+    }
+  } else {
+    workspace = await prompt("Enter workspace name (default: collab): ") || "collab";
+  }
+
+  let workspaceId: string;
+  let isExistingWorkspace = false;
+  try {
+    // Create workspace with honcho-clawd app tag in metadata
+    const ws = await client.workspaces.getOrCreate({
+      id: workspace,
+      metadata: { app: WORKSPACE_APP_TAG },
+    });
+    workspaceId = ws.id;
+
+    // If workspace existed but doesn't have our tag, update it
+    const wsMetadata = (ws as any).metadata || {};
+    if (wsMetadata.app !== WORKSPACE_APP_TAG) {
+      try {
+        await (client.workspaces as any).update(workspaceId, {
+          metadata: { ...wsMetadata, app: WORKSPACE_APP_TAG },
+        });
+      } catch {
+        // Update may not be available, continue anyway
+      }
+    }
+
+    // Check if workspace has existing sessions to determine if it's "existing"
+    try {
+      const sessions = await client.workspaces.sessions.list(workspaceId);
+      if (sessions && Array.isArray(sessions) && sessions.length > 0) {
+        isExistingWorkspace = true;
+        console.log(`✓ Connected to existing workspace "${workspace}" (${sessions.length} session${sessions.length === 1 ? '' : 's'})`);
+      } else {
+        console.log(`✓ Created new workspace "${workspace}"`);
+      }
+    } catch {
+      console.log(`✓ Connected to workspace "${workspace}"`);
+    }
+  } catch (error) {
+    console.error(`Error: Could not connect to Honcho. Check your API key.`);
+    console.error(`Details: ${error}`);
+    process.exit(1);
+  }
+
+  // Step 3: Peer - List existing peers if workspace has history
+  console.log("\n--- Step 3: Peer Identity ---");
+  console.log("Your peer name is how Honcho identifies you across sessions.");
+
+  let existingPeers: string[] = [];
+  let peerName: string = "";
+
+  if (isExistingWorkspace) {
+    try {
+      // Try to list peers from the workspace
+      const peers = await (client.workspaces as any).peers.list(workspaceId);
+      if (peers && Array.isArray(peers)) {
+        existingPeers = peers.map((p: any) => p.id).filter((id: string) => !id.includes('clawd') && !id.includes('claude'));
+        if (existingPeers.length > 0) {
+          console.log(`\nExisting peers in workspace "${workspace}":`);
+          existingPeers.forEach((p, i) => console.log(`  ${i + 1}. ${p}`));
+          console.log(`  ${existingPeers.length + 1}. Create new peer`);
+
+          const peerChoice = await prompt(`\nSelect peer (1-${existingPeers.length + 1}) or enter name: `);
+          const choiceNum = parseInt(peerChoice);
+
+          if (choiceNum > 0 && choiceNum <= existingPeers.length) {
+            peerName = existingPeers[choiceNum - 1];
+            console.log(`✓ Using existing peer: ${peerName}`);
+          } else if (choiceNum === existingPeers.length + 1 || !peerChoice) {
+            peerName = await prompt("Enter your name/peer ID: ");
+          } else {
+            // They typed a name directly
+            peerName = peerChoice;
+          }
+        }
+      }
+    } catch {
+      // peers.list may not exist, fall through to manual entry
+    }
+  }
+
+  // If we didn't get a peer name from selection, prompt for it
+  if (!peerName) {
+    peerName = await prompt("Enter your name/peer ID: ");
+  }
+
+  if (!peerName) {
+    console.error("Error: Peer name is required.");
+    process.exit(1);
+  }
+
+  // Verify/create the peer
+  try {
+    await client.workspaces.peers.getOrCreate(workspaceId, { id: peerName });
+    if (!existingPeers.includes(peerName)) {
+      console.log(`✓ Created peer: ${peerName}`);
+    }
+  } catch (error) {
+    console.error(`Error creating peer: ${error}`);
+    process.exit(1);
+  }
+
+  // Step 4: Claude's peer name
+  console.log("\n--- Step 4: Claude Configuration ---");
+  const claudePeer = await prompt("Enter Claude's peer name (default: clawd): ") || "clawd";
+
+  // Create Claude's peer
+  try {
+    await client.workspaces.peers.getOrCreate(workspaceId, { id: claudePeer });
+  } catch {
+    // Ignore errors for Claude peer creation
+  }
+
+  // Step 5: Message saving preference
+  console.log("\n--- Step 5: Message Saving ---");
+  console.log("Save conversation messages to Honcho for memory/context building.");
+  const saveMessagesInput = await prompt("Enable message saving? (Y/n): ");
+  const saveMessages = saveMessagesInput.toLowerCase() !== "n";
+
   // Save config
-  const config: HonchoClaudisConfig = {
+  const config: HonchoCLAWDConfig = {
     peerName,
     apiKey,
     workspace,
@@ -111,12 +262,12 @@ async function init(): Promise<void> {
 }
 
 function status(): void {
-  console.log("\nhoncho-claudis status\n");
+  console.log("\nhoncho-clawd status\n");
 
   const config = loadConfig();
   if (!config) {
     console.log("Status: Not configured");
-    console.log("Run: honcho-claudis init");
+    console.log("Run: honcho-clawd init");
     return;
   }
 
@@ -152,14 +303,14 @@ function status(): void {
   }
 
   if (!hooksInstalled) {
-    console.log("\nRun: honcho-claudis install");
+    console.log("\nRun: honcho-clawd install");
   }
 }
 
 function install(): void {
   const config = loadConfig();
   if (!config) {
-    console.error("Not configured. Run: honcho-claudis init");
+    console.error("Not configured. Run: honcho-clawd init");
     process.exit(1);
   }
 
@@ -207,7 +358,7 @@ async function handleHook(hookName: string): Promise<void> {
 async function sessionNew(name?: string): Promise<void> {
   const config = loadConfig();
   if (!config) {
-    console.error("Not configured. Run: honcho-claudis init");
+    console.error("Not configured. Run: honcho-clawd init");
     process.exit(1);
   }
 
@@ -234,7 +385,10 @@ async function sessionNew(name?: string): Promise<void> {
       environment: "production",
     });
 
-    const workspace = await client.workspaces.getOrCreate({ id: config.workspace });
+    const workspace = await client.workspaces.getOrCreate({
+      id: config.workspace,
+      metadata: { app: WORKSPACE_APP_TAG },
+    });
 
     // Use getOrCreate - this will find existing session or create new one
     const session = await client.workspaces.sessions.getOrCreate(workspace.id, {
@@ -290,7 +444,7 @@ async function sessionNew(name?: string): Promise<void> {
 async function sessionList(): Promise<void> {
   const config = loadConfig();
   if (!config) {
-    console.error("Not configured. Run: honcho-claudis init");
+    console.error("Not configured. Run: honcho-clawd init");
     process.exit(1);
   }
 
@@ -318,7 +472,10 @@ async function sessionList(): Promise<void> {
       environment: "production",
     });
 
-    const workspace = await client.workspaces.getOrCreate({ id: config.workspace });
+    const workspace = await client.workspaces.getOrCreate({
+      id: config.workspace,
+      metadata: { app: WORKSPACE_APP_TAG },
+    });
     const sessions = await client.workspaces.sessions.list(workspace.id);
 
     if (sessions && Array.isArray(sessions)) {
@@ -341,7 +498,7 @@ async function sessionList(): Promise<void> {
 function sessionCurrent(): void {
   const config = loadConfig();
   if (!config) {
-    console.error("Not configured. Run: honcho-claudis init");
+    console.error("Not configured. Run: honcho-clawd init");
     process.exit(1);
   }
 
@@ -358,7 +515,7 @@ function sessionCurrent(): void {
     const dirName = require("path").basename(cwd).toLowerCase().replace(/[^a-z0-9-_]/g, "-");
     const defaultSession = `project-${dirName}`;
     console.log(`Session: ${defaultSession} (default)`);
-    console.log("\nTip: Use 'honcho-claudis session new <name>' to set a custom session name.");
+    console.log("\nTip: Use 'honcho-clawd session new <name>' to set a custom session name.");
   }
 
   console.log(`Workspace: ${config.workspace}`);
@@ -370,12 +527,12 @@ function sessionCurrent(): void {
 function sessionSwitch(name: string): void {
   const config = loadConfig();
   if (!config) {
-    console.error("Not configured. Run: honcho-claudis init");
+    console.error("Not configured. Run: honcho-clawd init");
     process.exit(1);
   }
 
   if (!name) {
-    console.error("Usage: honcho-claudis session switch <session-name>");
+    console.error("Usage: honcho-clawd session switch <session-name>");
     process.exit(1);
   }
 
@@ -407,6 +564,78 @@ function sessionClear(): void {
   console.log("\nThis directory will now use the default session name.");
 }
 
+// Peer management commands
+async function peerList(): Promise<void> {
+  const config = loadConfig();
+  if (!config) {
+    console.error("Not configured. Run: honcho-clawd init");
+    process.exit(1);
+  }
+
+  console.log("\n👥 Peers in Workspace\n");
+
+  try {
+    const client = new Honcho({
+      apiKey: config.apiKey,
+      environment: "production",
+    });
+
+    const workspace = await client.workspaces.getOrCreate({
+      id: config.workspace,
+      metadata: { app: WORKSPACE_APP_TAG },
+    });
+    const peers = await (client.workspaces as any).peers.list(workspace.id);
+
+    if (peers && Array.isArray(peers)) {
+      const userPeers = peers.filter((p: any) => !p.id.includes('clawd') && !p.id.includes('claude'));
+      const aiPeers = peers.filter((p: any) => p.id.includes('clawd') || p.id.includes('claude'));
+
+      console.log(`Workspace: ${config.workspace}`);
+      console.log(`Current peer: ${config.peerName}`);
+
+      if (userPeers.length > 0) {
+        console.log(`\nUser peers:`);
+        for (const peer of userPeers) {
+          const isCurrent = peer.id === config.peerName ? " (you)" : "";
+          console.log(`  - ${peer.id}${isCurrent}`);
+        }
+      }
+
+      if (aiPeers.length > 0) {
+        console.log(`\nAI peers:`);
+        for (const peer of aiPeers) {
+          const isCurrent = peer.id === config.claudePeer ? " (configured)" : "";
+          console.log(`  - ${peer.id}${isCurrent}`);
+        }
+      }
+
+      if (peers.length === 0) {
+        console.log("No peers found in workspace.");
+      }
+    } else {
+      console.log("Could not list peers (API may not support this).");
+    }
+  } catch (error) {
+    console.error(`Error listing peers: ${error}`);
+    process.exit(1);
+  }
+
+  console.log("");
+}
+
+async function handlePeer(subcommand: string, _arg?: string): Promise<void> {
+  switch (subcommand) {
+    case "list":
+      await peerList();
+      break;
+    default:
+      console.log(`
+Peer Management Commands:
+  honcho-clawd peer list     List all peers in workspace
+`);
+  }
+}
+
 async function handleSession(subcommand: string, arg?: string): Promise<void> {
   switch (subcommand) {
     case "new":
@@ -427,25 +656,25 @@ async function handleSession(subcommand: string, arg?: string): Promise<void> {
     default:
       console.log(`
 Session Management Commands:
-  honcho-claudis session new [name]     Create/connect session (defaults to dir name)
-  honcho-claudis session list           List all sessions
-  honcho-claudis session current        Show current session
-  honcho-claudis session switch <name>  Switch to existing session
-  honcho-claudis session clear          Remove custom session for current directory
+  honcho-clawd session new [name]     Create/connect session (defaults to dir name)
+  honcho-clawd session list           List all sessions
+  honcho-clawd session current        Show current session
+  honcho-clawd session switch <name>  Switch to existing session
+  honcho-clawd session clear          Remove custom session for current directory
 `);
   }
 }
 
 function showHelp(): void {
   console.log(`
-honcho-claudis v${VERSION}
+honcho-clawd v${VERSION}
 Persistent memory for Claude Code sessions using Honcho
 
 Usage:
-  honcho-claudis <command>
+  honcho-clawd <command>
 
 Commands:
-  init        Configure honcho-claudis (name, API key, workspace)
+  init        Configure honcho-clawd (name, API key, workspace)
   install     Install hooks to ~/.claude/settings.json
   uninstall   Remove hooks from Claude settings
   status      Show current configuration and hook status
@@ -458,6 +687,9 @@ Session Commands:
   session switch <name>  Switch to existing session
   session clear          Remove custom session mapping
 
+Peer Commands:
+  peer list              List all peers in workspace
+
 Hook Commands (internal):
   hook session-start    Handle SessionStart event
   hook session-end      Handle SessionEnd event
@@ -465,10 +697,10 @@ Hook Commands (internal):
   hook user-prompt      Handle UserPromptSubmit event
 
 Examples:
-  honcho-claudis init                  # First-time setup
-  honcho-claudis status                # Check if configured
-  honcho-claudis session new           # Create session from dir name
-  honcho-claudis session new myproject # Create named session
+  honcho-clawd init                  # First-time setup
+  honcho-clawd status                # Check if configured
+  honcho-clawd session new           # Create session from dir name
+  honcho-clawd session new myproject # Create named session
 
 Learn more: https://docs.honcho.dev
 `);
@@ -494,6 +726,9 @@ switch (command) {
   case "session":
     await handleSession(args[1], args[2]);
     break;
+  case "peer":
+    await handlePeer(args[1], args[2]);
+    break;
   case "hook":
     await handleHook(args[1]);
     break;
@@ -505,14 +740,14 @@ switch (command) {
   case "version":
   case "--version":
   case "-v":
-    console.log(`honcho-claudis v${VERSION}`);
+    console.log(`honcho-clawd v${VERSION}`);
     break;
   default:
     if (!command) {
       showHelp();
     } else {
       console.error(`Unknown command: ${command}`);
-      console.log("Run: honcho-claudis help");
+      console.log("Run: honcho-clawd help");
       process.exit(1);
     }
 }

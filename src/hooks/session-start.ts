@@ -9,11 +9,13 @@ import {
   getCachedSessionId,
   setCachedSessionId,
   setCachedUserContext,
-  setCachedClaudisContext,
-  loadClaudisLocalContext,
+  setCachedClawdContext,
+  loadClawdLocalContext,
   resetMessageCount,
 } from "../cache.js";
 import { Spinner } from "../spinner.js";
+
+const WORKSPACE_APP_TAG = "honcho-clawd";
 
 interface HookInput {
   session_id?: string;
@@ -56,7 +58,7 @@ function formatRepresentation(rep: any): string {
 export async function handleSessionStart(): Promise<void> {
   const config = loadConfig();
   if (!config) {
-    console.error("[honcho-claudis] Not configured. Run: honcho-claudis init");
+    console.error("[honcho-clawd] Not configured. Run: honcho-clawd init");
     process.exit(1);
   }
 
@@ -77,7 +79,7 @@ export async function handleSessionStart(): Promise<void> {
 
   // Start loading animation
   const spinner = new Spinner({ style: "wave" });
-  spinner.start("honcho-claudis loading memory");
+  spinner.start("honcho-clawd loading memory");
 
   try {
     const client = new Honcho({
@@ -89,7 +91,10 @@ export async function handleSessionStart(): Promise<void> {
     spinner.update("Connecting to workspace");
     let workspaceId = getCachedWorkspaceId(config.workspace);
     if (!workspaceId) {
-      const workspace = await client.workspaces.getOrCreate({ id: config.workspace });
+      const workspace = await client.workspaces.getOrCreate({
+        id: config.workspace,
+        metadata: { app: WORKSPACE_APP_TAG },
+      });
       workspaceId = workspace.id;
       setCachedWorkspaceId(config.workspace, workspaceId);
     }
@@ -109,7 +114,7 @@ export async function handleSessionStart(): Promise<void> {
 
     // Step 3: Get or create peers (use cache if available)
     let userPeerId = getCachedPeerId(config.peerName);
-    let claudisPeerId = getCachedPeerId(config.claudePeer);
+    let clawdPeerId = getCachedPeerId(config.claudePeer);
 
     const peerPromises: Promise<any>[] = [];
     if (!userPeerId) {
@@ -120,10 +125,10 @@ export async function handleSessionStart(): Promise<void> {
         })
       );
     }
-    if (!claudisPeerId) {
+    if (!clawdPeerId) {
       peerPromises.push(
         client.workspaces.peers.getOrCreate(workspaceId, { id: config.claudePeer }).then((p) => {
-          claudisPeerId = p.id;
+          clawdPeerId = p.id;
           setCachedPeerId(config.claudePeer, p.id);
         })
       );
@@ -159,22 +164,22 @@ export async function handleSessionStart(): Promise<void> {
 - Session: ${sessionName}
 - Directory: ${cwd}`);
 
-    // Load local claudis context immediately (instant, no API call)
-    const localClaudisContext = loadClaudisLocalContext();
-    if (localClaudisContext) {
-      contextParts.push(`## Claudis Local Context (What I Was Working On)\n${localClaudisContext.slice(0, 2000)}`);
+    // Load local clawd context immediately (instant, no API call)
+    const localClawdContext = loadClawdLocalContext();
+    if (localClawdContext) {
+      contextParts.push(`## CLAWD Local Context (What I Was Working On)\n${localClawdContext.slice(0, 2000)}`);
     }
 
     // Parallel API calls for rich context
-    const [userContextResult, claudisContextResult, summariesResult, userChatResult, claudisChatResult] =
+    const [userContextResult, clawdContextResult, summariesResult, userChatResult, clawdChatResult] =
       await Promise.allSettled([
         // 1. Get user's context
         client.workspaces.peers.getContext(workspaceId, userPeerId!, {
           max_observations: 30,
           include_most_derived: true,
         }),
-        // 2. Get claudis's context (self-awareness!)
-        client.workspaces.peers.getContext(workspaceId, claudisPeerId!, {
+        // 2. Get clawd's context (self-awareness!)
+        client.workspaces.peers.getContext(workspaceId, clawdPeerId!, {
           max_observations: 20,
           include_most_derived: true,
         }),
@@ -185,8 +190,8 @@ export async function handleSessionStart(): Promise<void> {
           query: `Summarize what you know about ${config.peerName} in 2-3 sentences. Focus on their preferences, current projects, and working style.`,
           session_id: sessionId,
         }),
-        // 5. Dialectic: Ask about claudis (self-reflection!)
-        client.workspaces.peers.chat(workspaceId, claudisPeerId!, {
+        // 5. Dialectic: Ask about clawd (self-reflection!)
+        client.workspaces.peers.chat(workspaceId, clawdPeerId!, {
           query: `What has ${config.claudePeer} been working on recently? Summarize the AI assistant's recent activities and focus areas.`,
           session_id: sessionId,
         }),
@@ -209,10 +214,10 @@ export async function handleSessionStart(): Promise<void> {
       }
     }
 
-    // Process claudis context (self-awareness)
-    if (claudisContextResult.status === "fulfilled" && claudisContextResult.value) {
-      const context = claudisContextResult.value;
-      setCachedClaudisContext(context); // Cache
+    // Process clawd context (self-awareness)
+    if (clawdContextResult.status === "fulfilled" && clawdContextResult.value) {
+      const context = clawdContextResult.value;
+      setCachedClawdContext(context); // Cache
 
       if (context.representation) {
         const repText = formatRepresentation(context.representation);
@@ -238,9 +243,9 @@ export async function handleSessionStart(): Promise<void> {
       contextParts.push(`## AI Summary of ${config.peerName}\n${userChatResult.value.content}`);
     }
 
-    // Process claudis dialectic response (self-reflection)
-    if (claudisChatResult.status === "fulfilled" && claudisChatResult.value?.content) {
-      contextParts.push(`## AI Self-Reflection (What ${config.claudePeer} Has Been Doing)\n${claudisChatResult.value.content}`);
+    // Process clawd dialectic response (self-reflection)
+    if (clawdChatResult.status === "fulfilled" && clawdChatResult.value?.content) {
+      contextParts.push(`## AI Self-Reflection (What ${config.claudePeer} Has Been Doing)\n${clawdChatResult.value.content}`);
     }
 
     // Stop spinner and output context
@@ -251,7 +256,7 @@ export async function handleSessionStart(): Promise<void> {
     process.exit(0);
   } catch (error) {
     spinner.fail("memory load failed");
-    console.error(`[honcho-claudis] ${error}`);
+    console.error(`[honcho-clawd] ${error}`);
     process.exit(1);
   }
 }

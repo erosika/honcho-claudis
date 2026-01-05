@@ -1,10 +1,10 @@
 {
-  "name": "honcho-claudis",
+  "name": "honcho-clawd",
   "version": "0.1.0",
   "description": "Persistent memory for Claude Code sessions using Honcho by Plastic Labs",
   "type": "module",
   "bin": {
-    "honcho-claudis": "./dist/cli.js"
+    "honcho-clawd": "./dist/cli.js"
   },
   "scripts": {
     "build": "bun build ./src/cli.ts --outdir ./dist --target node",
@@ -23,7 +23,7 @@
     "context",
     "ai",
     "llm",
-    "honcho-claudis"
+    "honcho-clawd"
   ],
   "author": "",
   "license": "MIT",

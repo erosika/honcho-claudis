@@ -1,6 +1,6 @@
 ---
 description: Create or connect to a Honcho session for persistent memory
-allowed-tools: Bash(honcho-claudis:*)
+allowed-tools: Bash(honcho-clawd:*)
 argument-hint: [session-name]
 ---
 
@@ -14,11 +14,11 @@ Session name requested: $ARGUMENTS
 
 ## Current Session Info
 
-!`honcho-claudis session current 2>/dev/null || echo "No session configured yet"`
+!`honcho-clawd session current 2>/dev/null || echo "No session configured yet"`
 
 ## Creating/Connecting Session
 
-!`honcho-claudis session new $ARGUMENTS`
+!`honcho-clawd session new $ARGUMENTS`
 
 ## Instructions
 

@@ -1,6 +1,6 @@
 ---
 description: Switch to a different Honcho session
-allowed-tools: Bash(honcho-claudis:*)
+allowed-tools: Bash(honcho-clawd:*)
 argument-hint: <session-name>
 ---
 
@@ -12,11 +12,11 @@ Target session: $ARGUMENTS
 
 ## Current Session
 
-!`honcho-claudis session current 2>/dev/null`
+!`honcho-clawd session current 2>/dev/null`
 
 ## Switching Session
 
-!`honcho-claudis session switch $ARGUMENTS`
+!`honcho-clawd session switch $ARGUMENTS`
 
 ## Instructions
 

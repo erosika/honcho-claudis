@@ -7,11 +7,11 @@ interface ClaudeSettings {
   [key: string]: any;
 }
 
-const CLI_COMMAND = "honcho-claudis";
-const EXPECTED_VERSION_PREFIX = "honcho-claudis v";
+const CLI_COMMAND = "honcho-clawd";
+const EXPECTED_VERSION_PREFIX = "honcho-clawd v";
 
 // Legacy binary names that might conflict
-const LEGACY_BINARIES = ["claudis"];
+const LEGACY_BINARIES = ["claudis", "honcho-claudis"];
 
 interface CommandVerification {
   ok: boolean;
@@ -124,14 +124,14 @@ export function verifyCommandAvailable(): CommandVerification {
   }
 }
 
-function getHonchoClaudisHooks(): ClaudeSettings["hooks"] {
+function getHonchoCLAWDHooks(): ClaudeSettings["hooks"] {
   return {
     SessionStart: [
       {
         hooks: [
           {
             type: "command",
-            command: "honcho-claudis hook session-start",
+            command: "honcho-clawd hook session-start",
             timeout: 30000,
           },
         ],
@@ -142,7 +142,7 @@ function getHonchoClaudisHooks(): ClaudeSettings["hooks"] {
         hooks: [
           {
             type: "command",
-            command: "honcho-claudis hook session-end",
+            command: "honcho-clawd hook session-end",
             timeout: 30000,
           },
         ],
@@ -154,7 +154,7 @@ function getHonchoClaudisHooks(): ClaudeSettings["hooks"] {
         hooks: [
           {
             type: "command",
-            command: "honcho-claudis hook post-tool-use",
+            command: "honcho-clawd hook post-tool-use",
             timeout: 10000,
           },
         ],
@@ -165,7 +165,7 @@ function getHonchoClaudisHooks(): ClaudeSettings["hooks"] {
         hooks: [
           {
             type: "command",
-            command: "honcho-claudis hook user-prompt",
+            command: "honcho-clawd hook user-prompt",
             timeout: 15000,
           },
         ],
@@ -207,14 +207,15 @@ export function installHooks(): { success: boolean; message: string; warnings?: 
   }
 
   // Merge hooks
-  const honchoClaudisHooks = getHonchoClaudisHooks();
+  const honchoCLAWDHooks = getHonchoCLAWDHooks();
   settings.hooks = settings.hooks || {};
 
-  for (const [event, eventHooks] of Object.entries(honchoClaudisHooks)) {
-    // Remove any existing honcho-claudis or claudis (old name) hooks for this event
+  for (const [event, eventHooks] of Object.entries(honchoCLAWDHooks)) {
+    // Remove any existing honcho-clawd, honcho-claudis or claudis (old names) hooks for this event
     if (settings.hooks[event]) {
       settings.hooks[event] = settings.hooks[event].filter(
         (h) => !h.hooks.some((hook) =>
+          hook.command.includes("honcho-clawd") ||
           hook.command.includes("honcho-claudis") ||
           (hook.command.includes("claudis") && !hook.command.includes("honcho-claudis"))
         )
@@ -223,7 +224,7 @@ export function installHooks(): { success: boolean; message: string; warnings?: 
       settings.hooks[event] = [];
     }
 
-    // Add new honcho-claudis hooks
+    // Add new honcho-clawd hooks
     settings.hooks[event].push(...eventHooks);
   }
 
@@ -252,6 +253,7 @@ export function uninstallHooks(): { success: boolean; message: string } {
       for (const event of Object.keys(settings.hooks)) {
         settings.hooks[event] = settings.hooks[event].filter(
           (h) => !h.hooks.some((hook) =>
+            hook.command.includes("honcho-clawd") ||
             hook.command.includes("honcho-claudis") ||
             (hook.command.includes("claudis") && !hook.command.includes("honcho-claudis"))
           )
@@ -289,12 +291,12 @@ export function checkHooksInstalled(): boolean {
 
     if (!settings.hooks) return false;
 
-    // Check if any honcho-claudis hooks exist
+    // Check if any honcho-clawd hooks exist
     for (const event of Object.keys(settings.hooks)) {
-      const hasHonchoClaudisHook = settings.hooks[event].some((h) =>
-        h.hooks.some((hook) => hook.command.includes("honcho-claudis"))
+      const hasHonchoCLAWDHook = settings.hooks[event].some((h) =>
+        h.hooks.some((hook) => hook.command.includes("honcho-clawd"))
       );
-      if (hasHonchoClaudisHook) return true;
+      if (hasHonchoCLAWDHook) return true;
     }
 
     return false;

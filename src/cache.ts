@@ -3,11 +3,11 @@ import { join } from "path";
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync } from "fs";
 import { getContextRefreshConfig } from "./config.js";
 
-const CACHE_DIR = join(homedir(), ".honcho-claudis");
+const CACHE_DIR = join(homedir(), ".honcho-clawd");
 const ID_CACHE_FILE = join(CACHE_DIR, "cache.json");
 const CONTEXT_CACHE_FILE = join(CACHE_DIR, "context-cache.json");
 const MESSAGE_QUEUE_FILE = join(CACHE_DIR, "message-queue.jsonl");
-const CLAUDIS_CONTEXT_FILE = join(CACHE_DIR, "claudis-context.md");
+const CLAWD_CONTEXT_FILE = join(CACHE_DIR, "clawd-context.md");
 
 // Ensure cache directory exists
 function ensureCacheDir(): void {
@@ -82,12 +82,12 @@ export function setCachedSessionId(cwd: string, name: string, id: string): void 
 }
 
 // ============================================
-// Context Cache - user + claudis context with TTL
+// Context Cache - user + clawd context with TTL
 // ============================================
 
 interface ContextCache {
   userContext?: { data: any; fetchedAt: number };
-  claudisContext?: { data: any; fetchedAt: number };
+  clawdContext?: { data: any; fetchedAt: number };
   summaries?: { data: any; fetchedAt: number };
   messageCount?: number; // Track messages since last refresh
   lastRefreshMessageCount?: number; // Message count at last knowledge graph refresh
@@ -135,17 +135,17 @@ export function setCachedUserContext(data: any): void {
   saveContextCache(cache);
 }
 
-export function getCachedClaudisContext(): any | null {
+export function getCachedClawdContext(): any | null {
   const cache = loadContextCache();
-  if (cache.claudisContext && Date.now() - cache.claudisContext.fetchedAt < getContextTTL()) {
-    return cache.claudisContext.data;
+  if (cache.clawdContext && Date.now() - cache.clawdContext.fetchedAt < getContextTTL()) {
+    return cache.clawdContext.data;
   }
   return null;
 }
 
-export function setCachedClaudisContext(data: any): void {
+export function setCachedClawdContext(data: any): void {
   const cache = loadContextCache();
-  cache.claudisContext = { data, fetchedAt: Date.now() };
+  cache.clawdContext = { data, fetchedAt: Date.now() };
   saveContextCache(cache);
 }
 
@@ -234,38 +234,38 @@ export function markMessagesUploaded(): void {
 }
 
 // ============================================
-// Claudis Context File - self-summary
+// CLAWD Context File - self-summary
 // ============================================
 
-export function getClaudisContextPath(): string {
-  return CLAUDIS_CONTEXT_FILE;
+export function getClawdContextPath(): string {
+  return CLAWD_CONTEXT_FILE;
 }
 
-export function loadClaudisLocalContext(): string {
+export function loadClawdLocalContext(): string {
   ensureCacheDir();
-  if (!existsSync(CLAUDIS_CONTEXT_FILE)) {
+  if (!existsSync(CLAWD_CONTEXT_FILE)) {
     return "";
   }
   try {
-    return readFileSync(CLAUDIS_CONTEXT_FILE, "utf-8");
+    return readFileSync(CLAWD_CONTEXT_FILE, "utf-8");
   } catch {
     return "";
   }
 }
 
-export function saveClaudisLocalContext(content: string): void {
+export function saveClawdLocalContext(content: string): void {
   ensureCacheDir();
-  writeFileSync(CLAUDIS_CONTEXT_FILE, content);
+  writeFileSync(CLAWD_CONTEXT_FILE, content);
 }
 
-export function appendClaudisWork(workDescription: string): void {
+export function appendClawdWork(workDescription: string): void {
   ensureCacheDir();
   const timestamp = new Date().toISOString();
   const entry = `\n- [${timestamp}] ${workDescription}`;
 
-  let existing = loadClaudisLocalContext();
+  let existing = loadClawdLocalContext();
   if (!existing) {
-    existing = `# Claudis Work Context\n\nAuto-generated log of claudis's recent work.\n\n## Recent Activity\n`;
+    existing = `# CLAWD Work Context\n\nAuto-generated log of CLAWD's recent work.\n\n## Recent Activity\n`;
   }
 
   // Keep only last 50 entries to prevent file from growing too large
@@ -278,10 +278,10 @@ export function appendClaudisWork(workDescription: string): void {
     existing = [...header, ...recentActivities].join("\n");
   }
 
-  saveClaudisLocalContext(existing + entry);
+  saveClawdLocalContext(existing + entry);
 }
 
-export function generateClaudisSummary(
+export function generateClawdSummary(
   sessionName: string,
   workItems: string[],
   assistantMessages: string[]
@@ -300,12 +300,12 @@ export function generateClaudisSummary(
     }
   }
 
-  let summary = `# Claudis Work Context
+  let summary = `# CLAWD Work Context
 
 Last updated: ${timestamp}
 Session: ${sessionName}
 
-## What Claudis Was Working On
+## What CLAWD Was Working On
 
 `;
 
@@ -334,5 +334,5 @@ export function clearAllCaches(): void {
   if (existsSync(ID_CACHE_FILE)) writeFileSync(ID_CACHE_FILE, "{}");
   if (existsSync(CONTEXT_CACHE_FILE)) writeFileSync(CONTEXT_CACHE_FILE, "{}");
   if (existsSync(MESSAGE_QUEUE_FILE)) writeFileSync(MESSAGE_QUEUE_FILE, "");
-  // Don't clear claudis-context.md - that's valuable history
+  // Don't clear clawd-context.md - that's valuable history
 }

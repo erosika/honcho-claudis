@@ -14,18 +14,18 @@ export interface ContextRefreshConfig {
   skipDialectic?: boolean; // Skip chat() calls in user-prompt (default: true, saves $0.03/call)
 }
 
-export interface HonchoClaudisConfig {
+export interface HonchoCLAWDConfig {
   peerName: string; // The user's peer name
   apiKey: string; // Honcho API key
   workspace: string; // Honcho workspace name
-  claudePeer: string; // Claude's peer name (default: "claudis")
+  claudePeer: string; // Claude's peer name (default: "clawd")
   sessions?: Record<string, string>; // Map of directory path -> session name
   saveMessages?: boolean; // Save messages to Honcho (default: true)
   messageUpload?: MessageUploadConfig; // Token-based upload limits (default: no limits)
   contextRefresh?: ContextRefreshConfig; // Context retrieval settings
 }
 
-const CONFIG_DIR = join(homedir(), ".honcho-claudis");
+const CONFIG_DIR = join(homedir(), ".honcho-clawd");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
 export function getConfigDir(): string {
@@ -40,19 +40,19 @@ export function configExists(): boolean {
   return existsSync(CONFIG_FILE);
 }
 
-export function loadConfig(): HonchoClaudisConfig | null {
+export function loadConfig(): HonchoCLAWDConfig | null {
   if (!configExists()) {
     return null;
   }
   try {
     const content = readFileSync(CONFIG_FILE, "utf-8");
-    return JSON.parse(content) as HonchoClaudisConfig;
+    return JSON.parse(content) as HonchoCLAWDConfig;
   } catch {
     return null;
   }
 }
 
-export function saveConfig(config: HonchoClaudisConfig): void {
+export function saveConfig(config: HonchoCLAWDConfig): void {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true });
   }

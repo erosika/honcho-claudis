@@ -6,14 +6,14 @@
 
 **Persistent memory for Claude Code sessions using [Honcho](https://honcho.dev) by Plastic Labs.**
 
-Give Claude Code long-term memory that survives context wipes, session restarts, and even `ctrl+c` interruptions. Built on Honcho's Theory of Mind (ToM) framework for rich, semantic understanding.
+Give Claude Code long-term memory that survives context wipes, session restarts, and even `ctrl+c` interruptions. Built on Honcho's memory framework for rich, semantic understanding.
 
 ## Features
 
 - **Persistent Memory**: User messages and AI responses are saved to Honcho, building long-term context
 - **Survives Interruptions**: Local message queue ensures no data loss on `ctrl+c` or crashes
 - **AI Self-Awareness**: Claude knows what it was working on, even after context is wiped
-- **Dual Peer System**: Separate memory for user (you) and AI (claudis) with Theory of Mind
+- **Dual Peer System**: Separate memory for user (you) and AI (claudis)
 - **Semantic Search**: Relevant context is retrieved based on your current prompt
 - **Cost-Optimized**: Configurable refresh rates and caching to minimize API costs
 - **Ultra-Fast Hooks**: 98% latency reduction through caching, parallelization, and fire-and-forget patterns
@@ -134,7 +134,7 @@ claude
 │  └──────────┘  └──────────┘  └──────────────┘  └─────────────┘ │
 │                                     │                           │
 │                    ┌────────────────┴────────────────┐          │
-│                    │      Theory of Mind (ToM)       │          │
+│                    │       Persistent Memory         │          │
 │                    │  • Explicit Facts               │          │
 │                    │  • Deductive Insights           │          │
 │                    │  • Peer Cards (profiles)        │          │
@@ -152,7 +152,7 @@ honcho-claudis creates two "peers" in Honcho:
 | `eri` (you) | The user | Self | Build knowledge about your preferences, projects, style |
 | `claudis` | Claude AI | You | Build knowledge about what Claude has done, AI self-awareness |
 
-This enables Theory of Mind: Claude understands both what **you** know/want and what **it** has been working on.
+This enables Claude to understand both what **you** know/want and what **it** has been working on.
 
 ---
 
@@ -356,7 +356,7 @@ honcho-claudis maintains **claudis self-context** - a persistent record of Claud
 2. **SessionEnd**: A summary of Claude's work is generated and saved to Honcho
 3. **SessionStart**: Claude receives both:
    - **Local context**: Instant read from `claudis-context.md`
-   - **Honcho context**: Observations and patterns from Honcho's Theory of Mind
+   - **Honcho context**: Observations and patterns from Honcho's memory system
 
 ### Example
 
@@ -502,7 +502,7 @@ echo '{"prompt": "test", "cwd": "/tmp/test"}' | bun run dev hook user-prompt
 
 ## Credits
 
-- [Honcho](https://honcho.dev) by [Plastic Labs](https://plasticlabs.ai) - The memory/context API with Theory of Mind
+- [Honcho](https://honcho.dev) by [Plastic Labs](https://plasticlabs.ai) - The persistent memory API
 - [Claude Code](https://claude.ai/code) by [Anthropic](https://anthropic.com) - The AI coding assistant
 - Built with [Bun](https://bun.sh) - The fast JavaScript runtime
 

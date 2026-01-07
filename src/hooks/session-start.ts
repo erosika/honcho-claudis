@@ -15,6 +15,7 @@ import {
   setClaudeInstanceId,
 } from "../cache.js";
 import { Spinner } from "../spinner.js";
+import { displayHonchoStartup } from "../pixel.js";
 
 const WORKSPACE_APP_TAG = "honcho-clawd";
 
@@ -252,11 +253,14 @@ export async function handleSessionStart(): Promise<void> {
       contextParts.push(`## AI Self-Reflection (What ${config.claudePeer} Has Been Doing)\n${clawdChatResult.value.content}`);
     }
 
-    // Stop spinner and output context
-    spinner.stop("memory loaded");
+    // Stop spinner and display pixel art
+    spinner.stop();
+
+    // Display Honcho pixel character with startup message
+    console.log(displayHonchoStartup("Honcho Memory"));
 
     // Output all context
-    console.log(`[${config.claudePeer}/Honcho Memory Loaded]\n\n${contextParts.join("\n\n")}`);
+    console.log(`\n[${config.claudePeer}/Honcho Memory Loaded]\n\n${contextParts.join("\n\n")}`);
     process.exit(0);
   } catch (error) {
     spinner.fail("memory load failed");

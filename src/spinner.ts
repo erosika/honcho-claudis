@@ -47,6 +47,34 @@ const sparkles = ["⋆", "✧", "✦", "✧", "⊹", "✶", "✴", "✸"];
 // Neural network / thinking symbols
 const neuralChars = ["◐", "◓", "◑", "◒"];
 
+// ASCII-safe alternatives (works in any terminal)
+const asciiDots = [".  ", ".. ", "...", " ..", "  .", " ..", "...", ".. "];
+const asciiSpinner = ["|", "/", "-", "\\"];
+const asciiBar = ["[      ]", "[=     ]", "[==    ]", "[===   ]", "[====  ]", "[===== ]", "[======]", "[===== ]", "[====  ]", "[===   ]", "[==    ]", "[=     ]"];
+
+// ASCII-safe cooldown frames
+const asciiCooldownFrames = [
+  "[======]",
+  "[===== ]",
+  "[====  ]",
+  "[===   ]",
+  "[==    ]",
+  "[=     ]",
+  "[      ]",
+  "[      ]",
+];
+
+/**
+ * Check if terminal likely supports Unicode
+ */
+function supportsUnicode(): boolean {
+  const lang = process.env.LANG || process.env.LC_ALL || "";
+  const hasUtf8 = lang.toLowerCase().includes("utf-8") || lang.toLowerCase().includes("utf8");
+  const term = process.env.TERM || "";
+  const isBasicTerm = term === "dumb" || term === "linux" || term === "";
+  return hasUtf8 && !isBasicTerm;
+}
+
 // Color gradient array for easy indexing
 const gradient = [c.c1, c.c2, c.c3, c.c4, c.c5, c.c6, c.c7, c.c8, c.c7, c.c6, c.c5, c.c4, c.c3, c.c2];
 
@@ -54,7 +82,7 @@ const gradient = [c.c1, c.c2, c.c3, c.c4, c.c5, c.c6, c.c7, c.c8, c.c7, c.c6, c.
 const gradientExtended = [c.c1, c.c9, c.c2, c.c10, c.c3, c.c4, c.c5, c.c6, c.c7, c.c8, c.c7, c.c6, c.c5, c.c4, c.c3, c.c10, c.c2, c.c9];
 
 export interface SpinnerOptions {
-  style?: "wave" | "dots" | "simple" | "neural" | "braille" | "moon";
+  style?: "wave" | "dots" | "simple" | "neural" | "braille" | "moon" | "ascii";
 }
 
 /**
@@ -82,9 +110,12 @@ export class Spinner {
   private width = 7;
   private style: string;
   private ttyFd: number | null = null;
+  private useAscii: boolean;
 
   constructor(options: SpinnerOptions = {}) {
-    this.style = options.style || "wave";
+    // Auto-detect or force ASCII mode
+    this.useAscii = options.style === "ascii" || !supportsUnicode();
+    this.style = this.useAscii ? "ascii" : (options.style || "wave");
   }
 
   private write(text: string) {
@@ -176,10 +207,20 @@ export class Spinner {
         const colorIdx = (this.frame + i * 2) % gradientExtended.length;
         output += gradientExtended[colorIdx] + bounceDots[dotIdx];
       }
+    } else if (this.style === "ascii") {
+      // ASCII-safe animation (works in any terminal)
+      const spinnerIdx = this.frame % asciiSpinner.length;
+      const barIdx = this.frame % asciiBar.length;
+      const dotsIdx = this.frame % asciiDots.length;
+      const colorIdx = this.frame % gradientExtended.length;
+
+      output = gradientExtended[colorIdx] + asciiSpinner[spinnerIdx] + " " +
+               gradientExtended[(colorIdx + 3) % gradientExtended.length] + asciiBar[barIdx] + " " +
+               gradientExtended[(colorIdx + 6) % gradientExtended.length] + asciiDots[dotsIdx];
     } else {
       // Simple dots fallback
       const dots = ".".repeat((this.frame % 3) + 1).padEnd(3);
-      output = c.c4 + "●" + c.c5 + "●" + c.c6 + "●" + c.reset + dots;
+      output = c.c4 + "o" + c.c5 + "o" + c.c6 + "o" + c.reset + dots;
     }
 
     output += c.reset + " " + c.dim + this.message + c.reset;
@@ -216,8 +257,8 @@ export class Spinner {
     this.write("\r\x1b[K\x1b[?25h");
 
     if (successMessage) {
-      // Pretty success message with sparkle
-      const sparkle = c.c5 + "✦" + c.reset;
+      // Pretty success message - use ASCII-safe symbol if needed
+      const sparkle = this.useAscii ? (c.c5 + "*" + c.reset) : (c.c5 + "✦" + c.reset);
       this.write(`${sparkle} ${c.green}${successMessage}${c.reset}\n`);
     }
 
@@ -233,7 +274,9 @@ export class Spinner {
     this.write("\r\x1b[K\x1b[?25h");
 
     if (message) {
-      this.write(`${c.red}✗${c.reset} ${c.dim}${message}${c.reset}\n`);
+      // Use ASCII-safe symbol if needed
+      const x = this.useAscii ? "x" : "✗";
+      this.write(`${c.red}${x}${c.reset} ${c.dim}${message}${c.reset}\n`);
     }
 
     this.closeTTY();
@@ -259,8 +302,11 @@ const fadeDots = ["●●●●", "●●●○", "●●○○", "●○○○"
 /**
  * Play a cooldown animation when Claude shuts down
  * Returns a promise that resolves when animation completes
+ * Automatically uses ASCII-safe characters if Unicode isn't supported
  */
 export async function playCooldown(message = "saving memory"): Promise<void> {
+  const useAscii = !supportsUnicode();
+
   return new Promise((resolve) => {
     let frame = 0;
     let ttyFd: number | null = null;
@@ -290,6 +336,9 @@ export async function playCooldown(message = "saving memory"): Promise<void> {
     // Hide cursor
     write("\x1b[?25l");
 
+    const frames = useAscii ? asciiCooldownFrames : cooldownFrames;
+    const dots = useAscii ? ["oooo", "ooo.", "oo..", "o...", "...."] : fadeDots;
+
     const totalFrames = 18;
     const interval = setInterval(() => {
       // Calculate fade progress (0 to 1)
@@ -301,18 +350,18 @@ export async function playCooldown(message = "saving memory"): Promise<void> {
       const currentColor = fadeColors[colorIndex];
 
       // Build cooldown bar
-      const barIndex = Math.min(Math.floor(progress * cooldownFrames.length), cooldownFrames.length - 1);
-      const bar = cooldownFrames[barIndex];
+      const barIndex = Math.min(Math.floor(progress * frames.length), frames.length - 1);
+      const bar = frames[barIndex];
 
       // Fading dots
-      const dotIndex = Math.min(Math.floor(progress * fadeDots.length), fadeDots.length - 1);
-      const dots = fadeDots[dotIndex];
+      const dotIndex = Math.min(Math.floor(progress * dots.length), dots.length - 1);
+      const dotStr = dots[dotIndex];
 
-      // Neural-style brackets that fade
-      const prefix = currentColor + "⟨" + c.reset;
-      const suffix = currentColor + "⟩" + c.reset;
+      // Brackets - ASCII-safe if needed
+      const prefix = useAscii ? (currentColor + "<" + c.reset) : (currentColor + "⟨" + c.reset);
+      const suffix = useAscii ? (currentColor + ">" + c.reset) : (currentColor + "⟩" + c.reset);
 
-      const output = prefix + currentColor + bar + suffix + " " + currentColor + dots + c.reset + " " + c.dim + message + c.reset;
+      const output = prefix + currentColor + bar + suffix + " " + currentColor + dotStr + c.reset + " " + c.dim + message + c.reset;
 
       write(`\r\x1b[K${output}`);
       frame++;
@@ -321,7 +370,7 @@ export async function playCooldown(message = "saving memory"): Promise<void> {
         clearInterval(interval);
         // Final clear and goodbye
         write("\r\x1b[K");
-        const sparkle = c.c5 + "✦" + c.reset;
+        const sparkle = useAscii ? (c.c5 + "*" + c.reset) : (c.c5 + "✦" + c.reset);
         write(`${sparkle} ${c.dim}memory saved${c.reset}\n`);
         write("\x1b[?25h");
         closeTTY();

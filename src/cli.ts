@@ -20,6 +20,9 @@ import { handlePostToolUse } from "./hooks/post-tool-use.js";
 import { handleUserPrompt } from "./hooks/user-prompt.js";
 import { handlePreCompact } from "./hooks/pre-compact.js";
 import * as s from "./styles.js";
+import { previewAll as previewPixel } from "./pixel.js";
+import { handleHandoff } from "./skills/handoff.js";
+// import { handleCerebras } from "./skills/cerebras.js";  // Disabled for now
 
 const VERSION = "0.1.0";
 const WORKSPACE_APP_TAG = "honcho-clawd"; // Used to identify honcho-clawd workspaces
@@ -941,6 +944,10 @@ function showHelp(): void {
   console.log(s.section("Peer Commands"));
   console.log(`  ${s.highlight("peer list")}              List all peers in workspace`);
   console.log("");
+  console.log(s.section("Skills"));
+  console.log(`  ${s.highlight("handoff")}                Generate research handoff summary`);
+  console.log(`  ${s.highlight("handoff")} --all          Include all instances (not just current)`);
+  console.log("");
   console.log(s.dim("Learn more: https://docs.honcho.dev"));
   console.log("");
 }
@@ -987,6 +994,16 @@ switch (command) {
   case "-v":
     console.log(`honcho-clawd v${VERSION}`);
     break;
+  case "pixel":
+    previewPixel();
+    break;
+  case "handoff":
+    await handleHandoff(args.slice(1));
+    break;
+  // case "cerebras":
+  // case "fast":
+  //   await handleCerebras(args.slice(1));
+  //   break;
   default:
     if (!command) {
       showHelp();

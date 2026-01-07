@@ -224,7 +224,7 @@ export function queueMessage(content: string, peerId: string, cwd: string, insta
   appendFileSync(MESSAGE_QUEUE_FILE, JSON.stringify(message) + "\n");
 }
 
-export function getQueuedMessages(): QueuedMessage[] {
+export function getQueuedMessages(forCwd?: string): QueuedMessage[] {
   ensureCacheDir();
   if (!existsSync(MESSAGE_QUEUE_FILE)) {
     return [];
@@ -232,7 +232,12 @@ export function getQueuedMessages(): QueuedMessage[] {
   try {
     const content = readFileSync(MESSAGE_QUEUE_FILE, "utf-8");
     const lines = content.split("\n").filter((line) => line.trim());
-    return lines.map((line) => JSON.parse(line)).filter((msg) => !msg.uploaded);
+    const messages = lines.map((line) => JSON.parse(line)).filter((msg) => !msg.uploaded);
+    // Filter by cwd if specified
+    if (forCwd) {
+      return messages.filter((msg) => msg.cwd === forCwd);
+    }
+    return messages;
   } catch {
     return [];
   }
@@ -243,9 +248,30 @@ export function clearMessageQueue(): void {
   writeFileSync(MESSAGE_QUEUE_FILE, "");
 }
 
-export function markMessagesUploaded(): void {
-  // Simply clear the queue after successful upload
-  clearMessageQueue();
+export function markMessagesUploaded(forCwd?: string): void {
+  if (!forCwd) {
+    // Clear all
+    clearMessageQueue();
+    return;
+  }
+  // Only remove messages for the specified cwd, keep others
+  ensureCacheDir();
+  if (!existsSync(MESSAGE_QUEUE_FILE)) return;
+  try {
+    const content = readFileSync(MESSAGE_QUEUE_FILE, "utf-8");
+    const lines = content.split("\n").filter((line) => line.trim());
+    const remaining = lines.filter((line) => {
+      try {
+        const msg = JSON.parse(line);
+        return msg.cwd !== forCwd;
+      } catch {
+        return false;
+      }
+    });
+    writeFileSync(MESSAGE_QUEUE_FILE, remaining.join("\n") + (remaining.length ? "\n" : ""));
+  } catch {
+    // ignore
+  }
 }
 
 // ============================================

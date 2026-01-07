@@ -189,19 +189,24 @@ export async function handleSessionEnd(): Promise<void> {
 
     // =====================================================
     // Step 1: Upload queued user messages (backup for failed fire-and-forget)
+    // Only upload messages for THIS session (by cwd), not other sessions
     // =====================================================
     const instanceId = getClaudeInstanceId();
-    const queuedMessages = getQueuedMessages();
+    const queuedMessages = getQueuedMessages(cwd);  // Filter by current session's cwd
     if (queuedMessages.length > 0) {
-      const userMessages = queuedMessages.map((msg) => ({
-        content: msg.content,
-        peer_id: config.peerName,
-        metadata: msg.instanceId ? { instance_id: msg.instanceId } : undefined,
-      }));
-      await client.workspaces.sessions.messages.create(workspaceId, sessionId, {
-        messages: userMessages,
-      });
-      markMessagesUploaded();
+      // Skip oversized messages (likely pastes/dumps, not useful observations)
+      const validMessages = queuedMessages.filter((msg) => msg.content.length < 5000);
+      if (validMessages.length > 0) {
+        const userMessages = validMessages.map((msg) => ({
+          content: msg.content,
+          peer_id: config.peerName,
+          metadata: msg.instanceId ? { instance_id: msg.instanceId } : undefined,
+        }));
+        await client.workspaces.sessions.messages.create(workspaceId, sessionId, {
+          messages: userMessages,
+        });
+      }
+      markMessagesUploaded(cwd);  // Only clear this session's messages
     }
 
     // =====================================================

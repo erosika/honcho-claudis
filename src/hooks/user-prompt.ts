@@ -14,6 +14,7 @@ import {
   incrementMessageCount,
   shouldRefreshKnowledgeGraph,
   markKnowledgeGraphRefreshed,
+  getClaudeInstanceId,
 } from "../cache.js";
 
 interface HookInput {
@@ -147,8 +148,14 @@ async function uploadMessageAsync(config: any, cwd: string, prompt: string): Pro
     setCachedSessionId(cwd, sessionName, sessionId);
   }
 
+  // Include instance_id in metadata for parallel session support
+  const instanceId = getClaudeInstanceId();
   await client.workspaces.sessions.messages.create(workspaceId, sessionId, {
-    messages: [{ content: prompt, peer_id: config.peerName }],
+    messages: [{
+      content: prompt,
+      peer_id: config.peerName,
+      metadata: instanceId ? { instance_id: instanceId } : undefined,
+    }],
   });
 }
 

@@ -12,6 +12,7 @@ import {
   setCachedClawdContext,
   loadClawdLocalContext,
   resetMessageCount,
+  setClaudeInstanceId,
 } from "../cache.js";
 import { Spinner } from "../spinner.js";
 
@@ -72,13 +73,19 @@ export async function handleSessionStart(): Promise<void> {
   }
 
   const cwd = hookInput.cwd || process.cwd();
+  const claudeInstanceId = hookInput.session_id;
+
+  // Store Claude's instance ID for parallel session support
+  if (claudeInstanceId) {
+    setClaudeInstanceId(claudeInstanceId);
+  }
 
   // Reset message count for this session (for threshold-based knowledge graph refresh)
   resetMessageCount();
 
-  // Start loading animation
-  const spinner = new Spinner({ style: "wave" });
-  spinner.start("honcho-clawd loading memory");
+  // Start loading animation with neural style
+  const spinner = new Spinner({ style: "neural" });
+  spinner.start("loading memory");
 
   try {
     const client = new Honcho({

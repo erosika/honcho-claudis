@@ -9,6 +9,7 @@
   "scripts": {
     "build": "bun build ./src/cli.ts --outdir ./dist --target node",
     "dev": "bun run ./src/cli.ts",
+    "update": "rm -f bun.lockb && bun install && bun run build && bun link",
     "prepublishOnly": "bun run build"
   },
   "files": [

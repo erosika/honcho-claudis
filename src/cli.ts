@@ -18,6 +18,8 @@ import { handleSessionStart } from "./hooks/session-start.js";
 import { handleSessionEnd } from "./hooks/session-end.js";
 import { handlePostToolUse } from "./hooks/post-tool-use.js";
 import { handleUserPrompt } from "./hooks/user-prompt.js";
+import { handlePreCompact } from "./hooks/pre-compact.js";
+import * as s from "./styles.js";
 
 const VERSION = "0.1.0";
 const WORKSPACE_APP_TAG = "honcho-clawd"; // Used to identify honcho-clawd workspaces
@@ -37,8 +39,11 @@ function prompt(question: string): Promise<string> {
 }
 
 async function init(): Promise<void> {
-  console.log("\nhoncho-clawd setup\n");
-  console.log("This will configure persistent memory for Claude Code using Honcho.\n");
+  console.log("");
+  console.log(s.header("honcho-clawd setup"));
+  console.log("");
+  console.log(s.dim("Configure persistent memory for Claude Code using Honcho."));
+  console.log("");
 
   // Check for existing config
   if (configExists()) {
@@ -52,8 +57,8 @@ async function init(): Promise<void> {
   }
 
   // Step 1: API Key (needed to connect and discover existing resources)
-  console.log("--- Step 1: Honcho API Key ---");
-  console.log("Get your API key from https://app.honcho.dev");
+  console.log(s.section("Step 1: Honcho API Key"));
+  console.log(s.dim("Get your API key from https://app.honcho.dev"));
   const apiKey = await prompt("Enter your Honcho API key: ");
   if (!apiKey) {
     console.error("Error: API key is required.");
@@ -69,8 +74,9 @@ async function init(): Promise<void> {
   console.log("Connecting to Honcho...");
 
   // Step 2: Workspace - Try to discover existing honcho-clawd workspaces first
-  console.log("\n--- Step 2: Workspace ---");
-  console.log("Workspaces group your sessions and peers together.");
+  console.log("");
+  console.log(s.section("Step 2: Workspace"));
+  console.log(s.dim("Workspaces group your sessions and peers together."));
 
   let existingWorkspaces: Array<{ id: string; name: string; sessions: number }> = [];
   try {
@@ -105,7 +111,7 @@ async function init(): Promise<void> {
 
     if (choiceNum > 0 && choiceNum <= existingWorkspaces.length) {
       workspace = existingWorkspaces[choiceNum - 1].name;
-      console.log(`✓ Using existing workspace: ${workspace}`);
+      console.log(s.success(`Using existing workspace: ${s.highlight(workspace)}`));
     } else if (choiceNum === existingWorkspaces.length + 1 || !wsChoice) {
       workspace = await prompt("Enter new workspace name (default: claude_code): ") || "claude_code";
     } else {
@@ -143,12 +149,12 @@ async function init(): Promise<void> {
       const sessions = await client.workspaces.sessions.list(workspaceId);
       if (sessions && Array.isArray(sessions) && sessions.length > 0) {
         isExistingWorkspace = true;
-        console.log(`✓ Connected to existing workspace "${workspace}" (${sessions.length} session${sessions.length === 1 ? '' : 's'})`);
+        console.log(s.success(`Connected to existing workspace ${s.highlight(workspace)} (${sessions.length} session${sessions.length === 1 ? '' : 's'})`));
       } else {
-        console.log(`✓ Created new workspace "${workspace}"`);
+        console.log(s.success(`Created new workspace ${s.highlight(workspace)}`));
       }
     } catch {
-      console.log(`✓ Connected to workspace "${workspace}"`);
+      console.log(s.success(`Connected to workspace ${s.highlight(workspace)}`));
     }
   } catch (error) {
     console.error(`Error: Could not connect to Honcho. Check your API key.`);
@@ -157,8 +163,9 @@ async function init(): Promise<void> {
   }
 
   // Step 3: Peer - List existing peers if workspace has history
-  console.log("\n--- Step 3: Peer Identity ---");
-  console.log("Your peer name is how Honcho identifies you across sessions.");
+  console.log("");
+  console.log(s.section("Step 3: Peer Identity"));
+  console.log(s.dim("Your peer name is how Honcho identifies you across sessions."));
 
   let existingPeers: string[] = [];
   let peerName: string = "";
@@ -179,7 +186,7 @@ async function init(): Promise<void> {
 
           if (choiceNum > 0 && choiceNum <= existingPeers.length) {
             peerName = existingPeers[choiceNum - 1];
-            console.log(`✓ Using existing peer: ${peerName}`);
+            console.log(s.success(`Using existing peer: ${s.highlight(peerName)}`));
           } else if (choiceNum === existingPeers.length + 1 || !peerChoice) {
             peerName = await prompt("Enter your name/peer ID: ");
           } else {
@@ -207,7 +214,7 @@ async function init(): Promise<void> {
   try {
     await client.workspaces.peers.getOrCreate(workspaceId, { id: peerName });
     if (!existingPeers.includes(peerName)) {
-      console.log(`✓ Created peer: ${peerName}`);
+      console.log(s.success(`Created peer: ${s.highlight(peerName)}`));
     }
   } catch (error) {
     console.error(`Error creating peer: ${error}`);
@@ -215,7 +222,8 @@ async function init(): Promise<void> {
   }
 
   // Step 4: Claude's peer name
-  console.log("\n--- Step 4: Claude Configuration ---");
+  console.log("");
+  console.log(s.section("Step 4: Claude Configuration"));
   const claudePeer = await prompt("Enter Claude's peer name (default: clawd): ") || "clawd";
 
   // Create Claude's peer
@@ -226,8 +234,9 @@ async function init(): Promise<void> {
   }
 
   // Step 5: Message saving preference
-  console.log("\n--- Step 5: Message Saving ---");
-  console.log("Save conversation messages to Honcho for memory/context building.");
+  console.log("");
+  console.log(s.section("Step 5: Message Saving"));
+  console.log(s.dim("Save conversation messages to Honcho for memory/context building."));
   const saveMessagesInput = await prompt("Enable message saving? (Y/n): ");
   const saveMessages = saveMessagesInput.toLowerCase() !== "n";
 
@@ -244,82 +253,99 @@ async function init(): Promise<void> {
   console.log(`\nConfiguration saved to: ${getConfigPath()}`);
 
   // Offer to install hooks
-  console.log("\n--- Install Hooks ---");
+  console.log("");
+  console.log(s.section("Install Hooks"));
   const installNow = await prompt("Install Claude Code hooks now? (Y/n): ");
   if (installNow.toLowerCase() !== "n") {
     const result = installHooks();
     if (result.success) {
-      console.log(`✓ ${result.message}`);
+      console.log(s.success(result.message));
     } else {
-      console.error(`✗ ${result.message}`);
+      console.log(s.error(result.message));
     }
   }
 
-  console.log("\n✓ Setup complete!");
-  console.log(`\nYour sessions will now be saved to Honcho as "${peerName}".`);
-  console.log(`Claude will be identified as "${claudePeer}".`);
-  console.log("\nStart a new Claude Code session to begin saving memory.\n");
+  console.log("");
+  console.log(s.success("Setup complete!"));
+  console.log("");
+  console.log(s.dim(`Your sessions will now be saved to Honcho as ${s.highlight(peerName)}.`));
+  console.log(s.dim(`Claude will be identified as ${s.highlight(claudePeer)}.`));
+  console.log("");
+  console.log("Start a new Claude Code session to begin saving memory.");
+  console.log("");
 }
 
 function status(): void {
-  console.log("\nhoncho-clawd status\n");
+  console.log("");
+  console.log(s.header("honcho-clawd status"));
+  console.log("");
 
   const config = loadConfig();
   if (!config) {
-    console.log("Status: Not configured");
-    console.log("Run: honcho-clawd init");
+    console.log(s.warn("Not configured"));
+    console.log(s.dim("Run: honcho-clawd init"));
     return;
   }
 
-  console.log(`Configuration: ${getConfigPath()}`);
-  console.log(`  Peer name: ${config.peerName}`);
-  console.log(`  Claude peer: ${config.claudePeer}`);
-  console.log(`  Workspace: ${config.workspace}`);
-  console.log(`  Save messages: ${config.saveMessages !== false ? "enabled" : "disabled"}`);
-  console.log(`  API key: ${config.apiKey.slice(0, 20)}...`);
+  console.log(s.section("Configuration"));
+  console.log(s.dim(getConfigPath()));
+  console.log("");
+  console.log(`  ${s.label("Peer name")}:     ${config.peerName}`);
+  console.log(`  ${s.label("Claude peer")}:   ${config.claudePeer}`);
+  console.log(`  ${s.label("Workspace")}:     ${config.workspace}`);
+  console.log(`  ${s.label("Save messages")}: ${config.saveMessages !== false ? "enabled" : "disabled"}`);
+  console.log(`  ${s.label("API key")}:       ${s.dim(config.apiKey.slice(0, 20) + "...")}`);
 
   const hooksInstalled = checkHooksInstalled();
-  console.log(`\nHooks: ${hooksInstalled ? "Installed" : "Not installed"}`);
-  console.log(`  Location: ${getClaudeSettingsPath()}`);
+  console.log("");
+  console.log(s.section("Hooks"));
+  console.log(`  ${s.label("Status")}:   ${hooksInstalled ? s.success("installed") : s.warn("not installed")}`);
+  console.log(`  ${s.label("Location")}: ${s.dim(getClaudeSettingsPath())}`);
 
   // Check command verification
   const verification = verifyCommandAvailable();
-  console.log(`\nCommand Status: ${verification.ok ? "✓ OK" : "✗ Problem detected"}`);
+  console.log("");
+  console.log(s.section("Command"));
+  console.log(`  ${s.label("Status")}: ${verification.ok ? s.success("OK") : s.error("problem detected")}`);
   if (!verification.ok) {
-    console.log(`  Error: ${verification.error}`);
+    console.log(`  ${s.label("Error")}: ${verification.error}`);
     if (verification.details) {
-      console.log(`  ${verification.details.split("\n").join("\n  ")}`);
+      console.log(`  ${s.dim(verification.details.split("\n").join("\n  "))}`);
     }
   }
 
   // Check for legacy binaries
   const legacy = checkLegacyBinaries();
   if (legacy.found.length > 0) {
-    console.log(`\n⚠️  Legacy binaries found (may conflict with shell aliases):`);
+    console.log("");
+    console.log(s.warn("Legacy binaries found (may conflict with shell aliases):"));
     for (const binary of legacy.found) {
-      console.log(`  - ${binary}: ${legacy.paths[binary]}`);
+      console.log(`  ${s.dim(s.symbols.bullet)} ${binary}: ${s.path(legacy.paths[binary])}`);
     }
-    console.log(`\n  Remove with: rm ${legacy.found.map(b => legacy.paths[b]).join(" ")}`);
+    console.log("");
+    console.log(s.dim(`  Remove with: rm ${legacy.found.map(b => legacy.paths[b]).join(" ")}`));
   }
 
   if (!hooksInstalled) {
-    console.log("\nRun: honcho-clawd install");
+    console.log("");
+    console.log(s.dim("Run: honcho-clawd install"));
   }
+  console.log("");
 }
 
 function install(): void {
   const config = loadConfig();
   if (!config) {
-    console.error("Not configured. Run: honcho-clawd init");
+    console.log(s.error("Not configured. Run: honcho-clawd init"));
     process.exit(1);
   }
 
   const result = installHooks();
   if (result.success) {
-    console.log(`✓ ${result.message}`);
-    console.log("\nHooks will apply to all new Claude Code sessions.");
+    console.log(s.success(result.message));
+    console.log(s.dim("Hooks will apply to all new Claude Code sessions."));
   } else {
-    console.error(`✗ ${result.message}`);
+    console.log(s.error(result.message));
     process.exit(1);
   }
 }
@@ -327,9 +353,59 @@ function install(): void {
 function uninstall(): void {
   const result = uninstallHooks();
   if (result.success) {
-    console.log(`✓ ${result.message}`);
+    console.log(s.success(result.message));
   } else {
-    console.error(`✗ ${result.message}`);
+    console.log(s.error(result.message));
+    process.exit(1);
+  }
+}
+
+async function update(): Promise<void> {
+  const { execSync } = require("child_process");
+  const { dirname, join } = require("path");
+  const { existsSync: fsExistsSync } = require("fs");
+
+  // Find the package directory (where this CLI is installed from)
+  const packageDir = join(dirname(dirname(Bun.main)));
+
+  console.log("");
+  console.log(s.header("honcho-clawd update"));
+  console.log("");
+  console.log(`${s.label("Package")}: ${s.path(packageDir)}`);
+  console.log("");
+
+  try {
+    // Check if we're in the right directory
+    const packageJsonPath = join(packageDir, "package.json");
+    if (!fsExistsSync(packageJsonPath)) {
+      console.log(s.error("Could not find package.json"));
+      console.log(s.dim("Run this command from the honcho-clawd source directory,"));
+      console.log(s.dim("or use: cd <honcho-clawd-dir> && bun run update"));
+      process.exit(1);
+    }
+
+    console.log(s.dim("Removing bun.lockb..."));
+    try {
+      execSync("rm -f bun.lockb", { cwd: packageDir, stdio: "inherit" });
+    } catch { /* ignore if doesn't exist */ }
+
+    console.log(s.dim("Installing dependencies..."));
+    execSync("bun install", { cwd: packageDir, stdio: "inherit" });
+
+    console.log("");
+    console.log(s.dim("Building..."));
+    execSync("bun run build", { cwd: packageDir, stdio: "inherit" });
+
+    console.log("");
+    console.log(s.dim("Linking globally..."));
+    execSync("bun link", { cwd: packageDir, stdio: "inherit" });
+
+    console.log("");
+    console.log(s.success("Update complete!"));
+    console.log(s.dim("Run 'honcho-clawd status' to verify."));
+  } catch (error) {
+    console.log("");
+    console.log(s.error(`Update failed: ${error}`));
     process.exit(1);
   }
 }
@@ -347,6 +423,9 @@ async function handleHook(hookName: string): Promise<void> {
       break;
     case "user-prompt":
       await handleUserPrompt();
+      break;
+    case "pre-compact":
+      await handlePreCompact();
       break;
     default:
       console.error(`Unknown hook: ${hookName}`);
@@ -425,14 +504,15 @@ async function sessionNew(name?: string): Promise<void> {
     setSessionForPath(cwd, validName);
 
     if (isExisting) {
-      console.log(`✓ Connected to existing session: ${validName}`);
-      console.log(`  Continuing from previous context...`);
+      console.log(s.success(`Connected to existing session: ${s.highlight(validName)}`));
+      console.log(s.dim("  Continuing from previous context..."));
     } else {
-      console.log(`✓ Created new session: ${validName}`);
+      console.log(s.success(`Created new session: ${s.highlight(validName)}`));
     }
-    console.log(`  Workspace: ${config.workspace}`);
-    console.log(`  Directory: ${cwd}`);
-    console.log(`\nThis directory will now use session "${validName}" for Honcho memory.`);
+    console.log(`  ${s.label("Workspace")}: ${config.workspace}`);
+    console.log(`  ${s.label("Directory")}: ${s.path(cwd)}`);
+    console.log("");
+    console.log(s.dim(`This directory will now use session "${validName}" for Honcho memory.`));
   } catch (error) {
     console.error(`Failed to create/connect session: ${error}`);
     process.exit(1);
@@ -446,21 +526,23 @@ async function sessionList(): Promise<void> {
     process.exit(1);
   }
 
-  console.log("\n📋 Honcho Sessions\n");
+  console.log("");
+  console.log(s.header("Honcho Sessions"));
+  console.log("");
 
   // Show local mappings
   const localSessions = getAllSessions();
   const localCount = Object.keys(localSessions).length;
 
   if (localCount > 0) {
-    console.log("Local directory mappings:");
-    for (const [path, sessionName] of Object.entries(localSessions)) {
-      const isCurrent = path === process.cwd() ? " (current)" : "";
-      console.log(`  ${sessionName}${isCurrent}`);
-      console.log(`    → ${path}`);
+    console.log(s.section("Local directory mappings"));
+    for (const [p, sessionName] of Object.entries(localSessions)) {
+      const isCurrent = p === process.cwd() ? ` ${s.current("current")}` : "";
+      console.log(`  ${s.highlight(sessionName)}${isCurrent}`);
+      console.log(`    ${s.dim(s.symbols.arrow)} ${s.path(p)}`);
     }
   } else {
-    console.log("No local session mappings yet.");
+    console.log(s.dim("No local session mappings yet."));
   }
 
   // Try to list sessions from Honcho
@@ -539,12 +621,13 @@ function sessionSwitch(name: string): void {
 
   setSessionForPath(cwd, name);
 
-  console.log(`✓ Switched session for current directory`);
+  console.log(s.success("Switched session for current directory"));
   if (oldSession) {
-    console.log(`  From: ${oldSession}`);
+    console.log(`  ${s.label("From")}: ${oldSession}`);
   }
-  console.log(`  To: ${name}`);
-  console.log(`\nNew Claude Code sessions in this directory will use "${name}".`);
+  console.log(`  ${s.label("To")}:   ${s.highlight(name)}`);
+  console.log("");
+  console.log(s.dim(`New Claude Code sessions in this directory will use "${name}".`));
 }
 
 function sessionClear(): void {
@@ -557,9 +640,172 @@ function sessionClear(): void {
   }
 
   removeSessionForPath(cwd);
-  console.log(`✓ Cleared session mapping for this directory`);
-  console.log(`  Was: ${currentSession}`);
-  console.log("\nThis directory will now use the default session name.");
+  console.log(s.success("Cleared session mapping for this directory"));
+  console.log(`  ${s.label("Was")}: ${currentSession}`);
+  console.log("");
+  console.log(s.dim("This directory will now use the default session name."));
+}
+
+// Workspace management commands
+async function workspaceList(): Promise<void> {
+  const config = loadConfig();
+  if (!config) {
+    console.error("Not configured. Run: honcho-clawd init");
+    process.exit(1);
+  }
+
+  console.log("");
+  console.log(s.header("Workspaces"));
+  console.log("");
+  console.log(`${s.label("Current")}: ${s.highlight(config.workspace)}`);
+
+  try {
+    const client = new Honcho({
+      apiKey: config.apiKey,
+      environment: "production",
+    });
+
+    const workspaces = await (client as any).workspaces.list();
+    if (workspaces && Array.isArray(workspaces)) {
+      const clawdWorkspaces = workspaces.filter((ws: any) =>
+        ws.metadata?.app === WORKSPACE_APP_TAG
+      );
+
+      if (clawdWorkspaces.length > 0) {
+        console.log("\nAvailable honcho-clawd workspaces:");
+        for (const ws of clawdWorkspaces) {
+          const isCurrent = ws.id === config.workspace ? " (current)" : "";
+          console.log(`  - ${ws.id}${isCurrent}`);
+        }
+      }
+
+      const otherWorkspaces = workspaces.filter((ws: any) =>
+        ws.metadata?.app !== WORKSPACE_APP_TAG
+      );
+      if (otherWorkspaces.length > 0) {
+        console.log("\nOther workspaces:");
+        for (const ws of otherWorkspaces) {
+          console.log(`  - ${ws.id}`);
+        }
+      }
+    }
+  } catch {
+    console.log("\nCould not list remote workspaces.");
+  }
+
+  console.log("");
+}
+
+async function workspaceSwitch(name: string): Promise<void> {
+  const config = loadConfig();
+  if (!config) {
+    console.error("Not configured. Run: honcho-clawd init");
+    process.exit(1);
+  }
+
+  if (!name) {
+    console.error("Usage: honcho-clawd workspace switch <workspace-name>");
+    process.exit(1);
+  }
+
+  const oldWorkspace = config.workspace;
+
+  try {
+    const client = new Honcho({
+      apiKey: config.apiKey,
+      environment: "production",
+    });
+
+    // Verify or create the workspace
+    await client.workspaces.getOrCreate({
+      id: name,
+      metadata: { app: WORKSPACE_APP_TAG },
+    });
+
+    // Update config
+    config.workspace = name;
+    saveConfig(config);
+
+    console.log(s.success("Switched workspace"));
+    console.log(`  ${s.label("From")}: ${oldWorkspace}`);
+    console.log(`  ${s.label("To")}:   ${s.highlight(name)}`);
+    console.log("");
+    console.log(s.dim("New Claude Code sessions will use this workspace."));
+  } catch (error) {
+    console.error(`Error switching workspace: ${error}`);
+    process.exit(1);
+  }
+}
+
+async function workspaceRename(newName: string): Promise<void> {
+  const config = loadConfig();
+  if (!config) {
+    console.error("Not configured. Run: honcho-clawd init");
+    process.exit(1);
+  }
+
+  if (!newName) {
+    console.error("Usage: honcho-clawd workspace rename <new-name>");
+    console.error("\nNote: Workspace IDs in Honcho are immutable.");
+    console.error("This command creates a new workspace and updates your config.");
+    console.error("Your existing workspace data remains in the old workspace.");
+    process.exit(1);
+  }
+
+  const oldWorkspace = config.workspace;
+
+  if (oldWorkspace === newName) {
+    console.log("Workspace name is already set to: " + newName);
+    return;
+  }
+
+  try {
+    const client = new Honcho({
+      apiKey: config.apiKey,
+      environment: "production",
+    });
+
+    // Create the new workspace
+    await client.workspaces.getOrCreate({
+      id: newName,
+      metadata: { app: WORKSPACE_APP_TAG },
+    });
+
+    // Update config
+    config.workspace = newName;
+    saveConfig(config);
+
+    console.log(s.success("Workspace renamed"));
+    console.log(`  ${s.label("From")}: ${oldWorkspace}`);
+    console.log(`  ${s.label("To")}:   ${s.highlight(newName)}`);
+    console.log("");
+    console.log(s.dim("Note: This creates a new workspace. Your old workspace data"));
+    console.log(s.dim(`remains accessible at "${oldWorkspace}".`));
+  } catch (error) {
+    console.error(`Error renaming workspace: ${error}`);
+    process.exit(1);
+  }
+}
+
+async function handleWorkspace(subcommand: string, arg?: string): Promise<void> {
+  switch (subcommand) {
+    case "list":
+      await workspaceList();
+      break;
+    case "switch":
+      await workspaceSwitch(arg || "");
+      break;
+    case "rename":
+      await workspaceRename(arg || "");
+      break;
+    default:
+      console.log(`
+Workspace Management Commands:
+  honcho-clawd workspace list             List all workspaces
+  honcho-clawd workspace switch <name>    Switch to a different workspace
+  honcho-clawd workspace rename <name>    Create new workspace and switch to it
+`);
+  }
 }
 
 // Peer management commands
@@ -570,7 +816,9 @@ async function peerList(): Promise<void> {
     process.exit(1);
   }
 
-  console.log("\n👥 Peers in Workspace\n");
+  console.log("");
+  console.log(s.header("Peers in Workspace"));
+  console.log("");
 
   try {
     const client = new Honcho({
@@ -664,44 +912,37 @@ Session Management Commands:
 }
 
 function showHelp(): void {
-  console.log(`
-honcho-clawd v${VERSION}
-Persistent memory for Claude Code sessions using Honcho
-
-Usage:
-  honcho-clawd <command>
-
-Commands:
-  init        Configure honcho-clawd (name, API key, workspace)
-  install     Install hooks to ~/.claude/settings.json
-  uninstall   Remove hooks from Claude settings
-  status      Show current configuration and hook status
-  help        Show this help message
-
-Session Commands:
-  session new [name]     Create/connect Honcho session (defaults to dir name)
-  session list           List all sessions
-  session current        Show current session info
-  session switch <name>  Switch to existing session
-  session clear          Remove custom session mapping
-
-Peer Commands:
-  peer list              List all peers in workspace
-
-Hook Commands (internal):
-  hook session-start    Handle SessionStart event
-  hook session-end      Handle SessionEnd event
-  hook post-tool-use    Handle PostToolUse event
-  hook user-prompt      Handle UserPromptSubmit event
-
-Examples:
-  honcho-clawd init                  # First-time setup
-  honcho-clawd status                # Check if configured
-  honcho-clawd session new           # Create session from dir name
-  honcho-clawd session new myproject # Create named session
-
-Learn more: https://docs.honcho.dev
-`);
+  console.log("");
+  console.log(`${s.colors.orange}honcho-clawd${s.colors.reset} ${s.dim(`v${VERSION}`)}`);
+  console.log(s.dim("Persistent memory for Claude Code sessions using Honcho"));
+  console.log("");
+  console.log(`${s.label("Usage")}: honcho-clawd <command>`);
+  console.log("");
+  console.log(s.section("Commands"));
+  console.log(`  ${s.highlight("init")}        Configure honcho-clawd (name, API key, workspace)`);
+  console.log(`  ${s.highlight("install")}     Install hooks to ~/.claude/settings.json`);
+  console.log(`  ${s.highlight("uninstall")}   Remove hooks from Claude settings`);
+  console.log(`  ${s.highlight("update")}      Rebuild and reinstall (removes lockfile, builds, links)`);
+  console.log(`  ${s.highlight("status")}      Show current configuration and hook status`);
+  console.log(`  ${s.highlight("help")}        Show this help message`);
+  console.log("");
+  console.log(s.section("Session Commands"));
+  console.log(`  ${s.highlight("session new")} [name]     Create/connect Honcho session`);
+  console.log(`  ${s.highlight("session list")}           List all sessions`);
+  console.log(`  ${s.highlight("session current")}        Show current session info`);
+  console.log(`  ${s.highlight("session switch")} <name>  Switch to existing session`);
+  console.log(`  ${s.highlight("session clear")}          Remove custom session mapping`);
+  console.log("");
+  console.log(s.section("Workspace Commands"));
+  console.log(`  ${s.highlight("workspace list")}         List all workspaces`);
+  console.log(`  ${s.highlight("workspace switch")} <n>   Switch to a different workspace`);
+  console.log(`  ${s.highlight("workspace rename")} <n>   Create new workspace and switch to it`);
+  console.log("");
+  console.log(s.section("Peer Commands"));
+  console.log(`  ${s.highlight("peer list")}              List all peers in workspace`);
+  console.log("");
+  console.log(s.dim("Learn more: https://docs.honcho.dev"));
+  console.log("");
 }
 
 // Main
@@ -718,6 +959,9 @@ switch (command) {
   case "uninstall":
     uninstall();
     break;
+  case "update":
+    await update();
+    break;
   case "status":
     status();
     break;
@@ -726,6 +970,9 @@ switch (command) {
     break;
   case "peer":
     await handlePeer(args[1], args[2]);
+    break;
+  case "workspace":
+    await handleWorkspace(args[1], args[2]);
     break;
   case "hook":
     await handleHook(args[1]);

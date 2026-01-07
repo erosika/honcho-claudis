@@ -9,6 +9,7 @@ import {
   getCachedSessionId,
   setCachedSessionId,
   appendClawdWork,
+  getClaudeInstanceId,
 } from "../cache.js";
 
 const WORKSPACE_APP_TAG = "honcho-clawd";
@@ -145,12 +146,14 @@ async function logToHonchoAsync(config: any, cwd: string, summary: string): Prom
     setCachedPeerId(config.claudePeer, clawdPeerId);
   }
 
-  // Log the tool use
+  // Log the tool use with instance_id for parallel session support
+  const instanceId = getClaudeInstanceId();
   await client.workspaces.sessions.messages.create(workspaceId, sessionId, {
     messages: [
       {
         content: `[Tool] ${summary}`,
         peer_id: config.claudePeer,
+        metadata: instanceId ? { instance_id: instanceId } : undefined,
       },
     ],
   });

@@ -24,6 +24,7 @@ interface IdCache {
   workspace?: { name: string; id: string };
   peers?: Record<string, string>; // peerName -> peerId
   sessions?: Record<string, { name: string; id: string; updatedAt: string }>; // cwd -> session info
+  claudeInstanceId?: string; // Current Claude Code session_id for instance tagging
 }
 
 export function loadIdCache(): IdCache {
@@ -78,6 +79,18 @@ export function setCachedSessionId(cwd: string, name: string, id: string): void 
   const cache = loadIdCache();
   if (!cache.sessions) cache.sessions = {};
   cache.sessions[cwd] = { name, id, updatedAt: new Date().toISOString() };
+  saveIdCache(cache);
+}
+
+// Claude instance tracking for parallel session support
+export function getClaudeInstanceId(): string | null {
+  const cache = loadIdCache();
+  return cache.claudeInstanceId || null;
+}
+
+export function setClaudeInstanceId(instanceId: string): void {
+  const cache = loadIdCache();
+  cache.claudeInstanceId = instanceId;
   saveIdCache(cache);
 }
 
@@ -195,9 +208,10 @@ interface QueuedMessage {
   cwd: string;
   timestamp: string;
   uploaded?: boolean;
+  instanceId?: string; // Claude Code instance for parallel session support
 }
 
-export function queueMessage(content: string, peerId: string, cwd: string): void {
+export function queueMessage(content: string, peerId: string, cwd: string, instanceId?: string): void {
   ensureCacheDir();
   const message: QueuedMessage = {
     content,
@@ -205,6 +219,7 @@ export function queueMessage(content: string, peerId: string, cwd: string): void
     cwd,
     timestamp: new Date().toISOString(),
     uploaded: false,
+    instanceId: instanceId || getClaudeInstanceId() || undefined,
   };
   appendFileSync(MESSAGE_QUEUE_FILE, JSON.stringify(message) + "\n");
 }

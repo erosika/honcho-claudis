@@ -1,0 +1,147 @@
+/**
+ * Shared color scheme and styling utilities for honcho-clawd CLI
+ *
+ * Design principles:
+ * - No emojis, only tasteful Unicode symbols
+ * - Orange to pale light blue gradient
+ * - Consistent hierarchy: headers, labels, values, dim text
+ */
+
+// ANSI color codes - orange to pale light blue gradient
+export const colors = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+
+  // Primary gradient: orange → pale blue
+  orange: "\x1b[38;5;208m",
+  lightOrange: "\x1b[38;5;214m",
+  peach: "\x1b[38;5;215m",
+  palePeach: "\x1b[38;5;223m",
+  paleBlue: "\x1b[38;5;195m",
+  lightBlue: "\x1b[38;5;159m",
+  skyBlue: "\x1b[38;5;117m",
+  brightBlue: "\x1b[38;5;81m",
+
+  // Semantic colors
+  success: "\x1b[38;5;114m",  // green
+  error: "\x1b[38;5;203m",    // red
+  warn: "\x1b[38;5;214m",     // light orange (warning)
+
+  // Utility
+  white: "\x1b[38;5;255m",
+  gray: "\x1b[38;5;245m",
+};
+
+// Unicode symbols (tasteful, no emojis)
+export const symbols = {
+  check: "✓",
+  cross: "✗",
+  dot: "·",
+  bullet: "•",
+  arrow: "→",
+  line: "─",
+  corner: "└",
+  pipe: "│",
+  sparkle: "✦",
+};
+
+/**
+ * Style a header/title
+ */
+export function header(text: string): string {
+  const line = symbols.line.repeat(text.length);
+  return `${colors.orange}${text}${colors.reset}\n${colors.dim}${line}${colors.reset}`;
+}
+
+/**
+ * Style a section header (smaller than main header)
+ */
+export function section(text: string): string {
+  return `${colors.lightBlue}${text}${colors.reset}`;
+}
+
+/**
+ * Style a label (for key-value pairs)
+ */
+export function label(text: string): string {
+  return `${colors.skyBlue}${text}${colors.reset}`;
+}
+
+/**
+ * Style a value
+ */
+export function value(text: string): string {
+  return `${colors.white}${text}${colors.reset}`;
+}
+
+/**
+ * Style dim/secondary text
+ */
+export function dim(text: string): string {
+  return `${colors.dim}${text}${colors.reset}`;
+}
+
+/**
+ * Style a success message
+ */
+export function success(message: string): string {
+  return `${colors.success}${symbols.check}${colors.reset} ${message}`;
+}
+
+/**
+ * Style an error message
+ */
+export function error(message: string): string {
+  return `${colors.error}${symbols.cross}${colors.reset} ${message}`;
+}
+
+/**
+ * Style a warning message
+ */
+export function warn(message: string): string {
+  return `${colors.warn}!${colors.reset} ${message}`;
+}
+
+/**
+ * Style a list item
+ */
+export function listItem(text: string, indent: number = 0): string {
+  const padding = "  ".repeat(indent);
+  return `${padding}${colors.dim}${symbols.bullet}${colors.reset} ${text}`;
+}
+
+/**
+ * Style a key-value pair
+ */
+export function keyValue(key: string, val: string): string {
+  return `${label(key)}: ${value(val)}`;
+}
+
+/**
+ * Style current/active item marker
+ */
+export function current(text: string): string {
+  return `${colors.palePeach}(${text})${colors.reset}`;
+}
+
+/**
+ * Create a horizontal rule
+ */
+export function hr(width: number = 40): string {
+  return `${colors.dim}${symbols.line.repeat(width)}${colors.reset}`;
+}
+
+/**
+ * Style a path
+ */
+export function path(p: string): string {
+  return `${colors.gray}${p}${colors.reset}`;
+}
+
+/**
+ * Highlight text
+ */
+export function highlight(text: string): string {
+  return `${colors.peach}${text}${colors.reset}`;
+}

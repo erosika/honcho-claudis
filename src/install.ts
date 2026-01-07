@@ -171,6 +171,28 @@ function getHonchoCLAWDHooks(): ClaudeSettings["hooks"] {
         ],
       },
     ],
+    PreCompact: [
+      {
+        matcher: "auto",
+        hooks: [
+          {
+            type: "command",
+            command: "honcho-clawd hook pre-compact",
+            timeout: 20000,
+          },
+        ],
+      },
+      {
+        matcher: "manual",
+        hooks: [
+          {
+            type: "command",
+            command: "honcho-clawd hook pre-compact",
+            timeout: 20000,
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -181,7 +203,7 @@ export function installHooks(): { success: boolean; message: string; warnings?: 
   if (!verification.ok) {
     return {
       success: false,
-      message: `${verification.error}\n\n${verification.details || ""}\n\n⚠️  Hooks NOT installed to prevent breaking Claude Code.`,
+      message: `${verification.error}\n\n${verification.details || ""}\n\n!  Hooks NOT installed to prevent breaking Claude Code.`,
       warnings: verification.warnings,
     };
   }

@@ -14,7 +14,9 @@ import {
   generateClawdSummary,
   saveClawdLocalContext,
   loadClawdLocalContext,
+  getClaudeInstanceId,
 } from "../cache.js";
+import { playCooldown } from "../spinner.js";
 
 const WORKSPACE_APP_TAG = "honcho-clawd";
 
@@ -135,6 +137,9 @@ export async function handleSessionEnd(): Promise<void> {
   const reason = hookInput.reason || "unknown";
   const transcriptPath = hookInput.transcript_path;
 
+  // Play cooldown animation
+  await playCooldown("saving memory");
+
   try {
     const client = new Honcho({
       apiKey: config.apiKey,
@@ -185,11 +190,13 @@ export async function handleSessionEnd(): Promise<void> {
     // =====================================================
     // Step 1: Upload queued user messages (backup for failed fire-and-forget)
     // =====================================================
+    const instanceId = getClaudeInstanceId();
     const queuedMessages = getQueuedMessages();
     if (queuedMessages.length > 0) {
       const userMessages = queuedMessages.map((msg) => ({
         content: msg.content,
         peer_id: config.peerName,
+        metadata: msg.instanceId ? { instance_id: msg.instanceId } : undefined,
       }));
       await client.workspaces.sessions.messages.create(workspaceId, sessionId, {
         messages: userMessages,
@@ -213,6 +220,7 @@ export async function handleSessionEnd(): Promise<void> {
         const messagesToSend = assistantMessages.map((msg) => ({
           content: msg.content,
           peer_id: config.claudePeer,
+          metadata: instanceId ? { instance_id: instanceId } : undefined,
         }));
 
         await client.workspaces.sessions.messages.create(workspaceId, sessionId, {
@@ -253,6 +261,7 @@ export async function handleSessionEnd(): Promise<void> {
         {
           content: `[Session ended] Reason: ${reason}, Messages: ${transcriptMessages.length}, Time: ${new Date().toISOString()}`,
           peer_id: config.claudePeer,
+          metadata: instanceId ? { instance_id: instanceId } : undefined,
         },
       ],
     });

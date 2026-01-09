@@ -242,7 +242,7 @@ export class Spinner {
     this.frame++;
   }
 
-  start(message = "Loading...") {
+  start(message = "Loading...", options?: { slow?: boolean }) {
     if (this.interval) return;
     this.message = message;
     this.frame = 0;
@@ -251,9 +251,11 @@ export class Spinner {
     this.write("\x1b[?25l");
 
     // Render immediately, then animate
-    // Use 120ms for smoother animation (less CPU, less flickering)
+    // Use slower interval (200ms) for hooks to reduce flickering with Claude Code output
+    // Use faster interval (100ms) for standalone use
+    const intervalMs = options?.slow ? 200 : 100;
     this.render();
-    this.interval = setInterval(() => this.render(), 120);
+    this.interval = setInterval(() => this.render(), intervalMs);
   }
 
   update(message: string) {

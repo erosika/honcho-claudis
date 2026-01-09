@@ -142,9 +142,10 @@ export async function handlePreCompact(): Promise<void> {
   logHook("pre-compact", `Compaction triggered (${trigger})`);
 
   // Show spinner for auto compaction (context window full)
+  // Use slow mode to reduce flickering with Claude Code output
   const spinner = new Spinner({ style: "neural" });
   if (trigger === "auto") {
-    spinner.start("anchoring memory before compaction");
+    spinner.start("anchoring memory before compaction", { slow: true });
   }
 
   try {

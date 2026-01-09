@@ -110,8 +110,9 @@ export async function handleSessionStart(): Promise<void> {
   }
 
   // Start loading animation with neural style
+  // Use slow mode to reduce flickering when interleaved with Claude Code output
   const spinner = new Spinner({ style: "neural" });
-  spinner.start("loading memory");
+  spinner.start("loading memory", { slow: true });
 
   try {
     logHook("session-start", `Starting session in ${cwd}`, { branch: currentGitState?.branch });

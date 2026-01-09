@@ -37,6 +37,7 @@
 | `src/config.ts` | Configuration management, endpoint switching, helpers |
 | `src/cache.ts` | All caching logic (IDs, context, message queue, git state) |
 | `src/git.ts` | Git state capture and change detection |
+| `src/log.ts` | Activity logging for observability (`logs` command) |
 | `src/install.ts` | Hook installation to Claude settings |
 | `src/hooks/session-start.ts` | Load context from Honcho + local files + git state |
 | `src/hooks/session-end.ts` | Save messages, generate summary |
@@ -335,6 +336,44 @@ Skills are Claude Code slash commands that run honcho-clawd functionality:
 
 **Note**: Skills are cached at session start. New skills won't appear until you start a fresh Claude session.
 
+### Feature: Activity Logging
+
+**What it does**: Real-time observability into honcho-clawd operations for debugging and demos
+
+**Implementation**:
+- `src/log.ts` - Logging module with structured entries
+- `~/.honcho-clawd/activity.log` - Append-only log file (auto-truncates at 100KB)
+- Log levels: `hook`, `api`, `cache`, `flow`, `async`, `error`, `debug`
+
+**CLI Commands**:
+- `honcho-clawd logs` - View activity for current directory (live follow mode)
+- `honcho-clawd logs -a` - View all sessions with directory tags
+- `honcho-clawd logs -n20` - Show last 20 entries
+- `honcho-clawd logs clear` - Clear the log file
+- `honcho-clawd logs legend` - Show log type legend
+- `honcho-clawd logs path` - Show log file location
+
+**Data flow**:
+```
+Hook executes → logHook("session-start", "Loading context") → activity.log
+API call made → logApiCall("getContext", "GET", "user context") → activity.log
+Cache hit/miss → logCache("hit", "userContext") → activity.log
+```
+
+**Log entry structure**:
+```typescript
+{
+  timestamp: "2026-01-09T15:34:42.921Z",
+  level: "api",
+  source: "honcho",
+  message: "GET getContext → user context",
+  timing?: 45,        // ms (for API calls)
+  success?: true,     // operation result
+  cwd?: "/path/to/project",
+  session?: "my-session"
+}
+```
+
 ---
 
 ## State Locations
@@ -359,6 +398,9 @@ Skills are Claude Code slash commands that run honcho-clawd functionality:
 │
 ├── message-queue.jsonl   # Local message queue for reliability (append-only)
 │   └── Format: {content, peerId, cwd, timestamp, uploaded, instanceId}[] (one JSON per line)
+│
+├── activity.log          # Activity log for observability (append-only, auto-truncates)
+│   └── Format: {timestamp, level, source, message, timing?, success?, cwd?, session?}[] (one JSON per line)
 │
 └── clawd-context.md    # AI self-summary (survives context wipes)
     └── Format: Markdown with "## Recent Activity" section, capped at N entries (configurable)
@@ -593,6 +635,7 @@ workspaces.sessions.messages.create(workspaceId, sessionId, {messages})
 | `clawd-context.md` | post-tool-use | READ+WRITE | Yes | **HIGH** |
 | `clawd-context.md` | session-end | READ+WRITE | Yes | Low |
 | `clawd-context.md` | pre-compact | NONE | - | - |
+| `activity.log` | ALL | APPEND | Yes | Low |
 
 ---
 

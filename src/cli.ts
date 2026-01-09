@@ -409,11 +409,14 @@ async function update(): Promise<void> {
       process.exit(1);
     }
 
-    console.log(s.dim("Removing bun.lockb..."));
+    console.log(s.dim("Pulling latest from git..."));
     try {
-      execSync("rm -f bun.lockb", { cwd: packageDir, stdio: "inherit" });
-    } catch { /* ignore if doesn't exist */ }
+      execSync("git pull", { cwd: packageDir, stdio: "inherit" });
+    } catch {
+      console.log(s.warn("Git pull failed (not a git repo or no remote)"));
+    }
 
+    console.log("");
     console.log(s.dim("Installing dependencies..."));
     execSync("bun install", { cwd: packageDir, stdio: "inherit" });
 
@@ -941,8 +944,9 @@ async function handleTail(args: string[]): Promise<void> {
     return;
   }
 
-  const follow = args.includes("-f") || args.includes("--follow") || !subcommand;
   const showAll = args.includes("-a") || args.includes("--all");
+  const hasRealSubcommand = subcommand && !subcommand.startsWith("-");
+  const follow = args.includes("-f") || args.includes("--follow") || !hasRealSubcommand;
   const countArg = args.find(a => a.startsWith("-n"));
   const count = countArg ? parseInt(countArg.slice(2)) || 50 : 50;
 
@@ -1124,9 +1128,9 @@ function showHelp(): void {
   console.log(`  ${s.highlight("handoff")} --all          Include all instances (not just current)`);
   console.log("");
   console.log(s.section("Debugging"));
-  console.log(`  ${s.highlight("tail")}                   Live activity log`);
-  console.log(`  ${s.highlight("tail")} -a               All sessions`);
-  console.log(`  ${s.highlight("tail")} clear            Clear log`);
+  console.log(`  ${s.highlight("logs")}                   Live activity log`);
+  console.log(`  ${s.highlight("logs")} -a               All sessions`);
+  console.log(`  ${s.highlight("logs")} clear            Clear log`);
   console.log("");
   console.log(s.dim("Learn more: https://docs.honcho.dev"));
   console.log("");
@@ -1183,10 +1187,8 @@ switch (command) {
   case "handoff":
     await handleHandoff(args.slice(1));
     break;
-  case "tail":
-    await handleTail(args.slice(1));
-    break;
   case "logs":
+  case "tail":  // alias
     await handleTail(args.slice(1));
     break;
   // case "cerebras":

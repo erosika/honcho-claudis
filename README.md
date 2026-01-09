@@ -38,6 +38,7 @@ Give Claude Code long-term memory that survives context wipes, session restarts,
 - [Performance](#performance)
 - [AI Self-Awareness](#ai-self-awareness)
 - [Reliability](#reliability)
+- [Activity Log](#activity-log)
 - [CLI Reference](#cli-reference)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
@@ -53,27 +54,18 @@ Give Claude Code long-term memory that survives context wipes, session restarts,
 - [Claude Code](https://claude.ai/code) CLI
 - [Honcho](https://honcho.dev) account and API key
 
-### Install from Source
+### Install
 
 ```bash
-# Clone the repository
 git clone https://github.com/erosika/honcho-clawd.git
 cd honcho-clawd
-
-# Install dependencies
-bun install
-
-# Build
-bun run build
-
-# Install globally
-bun link
+bun i
 ```
 
-### Install from npm (coming soon)
+### Update
 
 ```bash
-bun install -g honcho-clawd
+honcho-clawd update
 ```
 
 ---
@@ -497,6 +489,32 @@ Session: my-project
 
 ---
 
+## Activity Log
+
+Watch honcho-clawd in action with the `logs` command:
+
+```bash
+# View activity for current directory
+honcho-clawd logs
+
+# View all sessions
+honcho-clawd logs -a
+
+# Clear the log
+honcho-clawd logs clear
+```
+
+The log shows:
+- **HOOK** - Hook lifecycle events (session-start, user-prompt, etc.)
+- **API** - Honcho API calls with timing
+- **CACHE** - Cache hits/misses
+- **FLOW** - Data flow and state transitions
+- **ASYNC** - Parallel operations
+
+Useful for debugging, demos, and understanding how honcho-clawd works under the hood.
+
+---
+
 ## CLI Reference
 
 ```
@@ -527,6 +545,11 @@ Endpoint Commands:
 Skills:
   handoff                Generate research handoff summary
   handoff --all          Include all instances (not just current)
+
+Debugging:
+  logs                   Live activity log (current directory)
+  logs -a                All sessions
+  logs clear             Clear log
 
 Hook Commands (internal - called by Claude Code):
   hook session-start    Handle SessionStart event

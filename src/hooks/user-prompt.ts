@@ -16,6 +16,7 @@ import {
   markKnowledgeGraphRefreshed,
   getClaudeInstanceId,
 } from "../cache.js";
+import { logHook, logApiCall, logCache, logFlow, setLogContext } from "../log.js";
 
 interface HookInput {
   prompt?: string;
@@ -61,10 +62,15 @@ export async function handleUserPrompt(): Promise<void> {
   const prompt = hookInput.prompt || "";
   const cwd = hookInput.cwd || process.cwd();
 
+  // Set log context for this hook
+  setLogContext(cwd, getSessionName(cwd));
+
   // Skip empty prompts
   if (!prompt.trim()) {
     process.exit(0);
   }
+
+  logHook("user-prompt", `Prompt received (${prompt.length} chars)`);
 
   // CRITICAL: Save message to local queue FIRST (instant, ~1-3ms)
   // This survives ctrl+c, network failures, everything
@@ -83,6 +89,7 @@ export async function handleUserPrompt(): Promise<void> {
 
   // For trivial prompts, skip heavy context retrieval but still upload
   if (shouldSkipContextRetrieval(prompt)) {
+    logHook("user-prompt", "Skipping context (trivial prompt)");
     if (uploadPromise) await uploadPromise.catch(() => {});
     process.exit(0);
   }
@@ -94,6 +101,7 @@ export async function handleUserPrompt(): Promise<void> {
 
   if (cachedContext && !cacheIsStale && !forceRefresh) {
     // Use cached context - instant response
+    logCache("hit", "userContext", "using cached");
     const contextParts = formatCachedContext(cachedContext, config.peerName);
     if (contextParts.length > 0) {
       outputContext(config.peerName, contextParts);
@@ -105,6 +113,7 @@ export async function handleUserPrompt(): Promise<void> {
   // Fetch fresh context when:
   // 1. Cache is stale (>60s old), OR
   // 2. Message threshold reached (every 10 messages)
+  logCache("miss", "userContext", forceRefresh ? "threshold refresh" : "stale cache");
   try {
     const contextParts = await fetchFreshContext(config, cwd, prompt);
     if (contextParts.length > 0) {
@@ -124,6 +133,7 @@ export async function handleUserPrompt(): Promise<void> {
 }
 
 async function uploadMessageAsync(config: any, cwd: string, prompt: string): Promise<void> {
+  logApiCall("sessions.messages.create", "POST", `user prompt (${prompt.length} chars)`);
   const client = new Honcho(getHonchoClientOptions(config));
 
   // Try to use cached IDs for speed
@@ -209,6 +219,7 @@ async function fetchFreshContext(config: any, cwd: string, prompt: string): Prom
 
   // Only use getContext() here - it's free/cheap and returns pre-computed knowledge
   // Skip chat() ($0.03 per call) - only use at session-start
+  const startTime = Date.now();
   const contextResult = await client.workspaces.peers.getContext(workspaceId, userPeerId, {
     search_query: prompt.slice(0, 500),
     search_top_k: 10,
@@ -217,8 +228,11 @@ async function fetchFreshContext(config: any, cwd: string, prompt: string): Prom
     include_most_derived: true,
   });
 
+  logApiCall("peers.getContext", "GET", `search query`, Date.now() - startTime, true);
+
   if (contextResult) {
     setCachedUserContext(contextResult); // Update cache
+    logCache("write", "userContext", `${contextResult.representation?.explicit?.length || 0} facts`);
 
     if (contextResult.representation?.explicit?.length) {
       const explicit = contextResult.representation.explicit

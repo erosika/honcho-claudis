@@ -251,8 +251,9 @@ export class Spinner {
     this.write("\x1b[?25l");
 
     // Render immediately, then animate
+    // Use 120ms for smoother animation (less CPU, less flickering)
     this.render();
-    this.interval = setInterval(() => this.render(), 80);
+    this.interval = setInterval(() => this.render(), 120);
   }
 
   update(message: string) {

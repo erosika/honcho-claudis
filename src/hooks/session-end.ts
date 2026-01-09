@@ -17,6 +17,7 @@ import {
   getClaudeInstanceId,
 } from "../cache.js";
 import { playCooldown } from "../spinner.js";
+import { logHook, logApiCall, setLogContext } from "../log.js";
 
 const WORKSPACE_APP_TAG = "honcho-clawd";
 
@@ -137,8 +138,13 @@ export async function handleSessionEnd(): Promise<void> {
   const reason = hookInput.reason || "unknown";
   const transcriptPath = hookInput.transcript_path;
 
+  // Set log context
+  setLogContext(cwd, getSessionName(cwd));
+
   // Play cooldown animation
   await playCooldown("saving memory");
+
+  logHook("session-end", `Session ending`, { reason });
 
   try {
     const client = new Honcho(getHonchoClientOptions(config));
@@ -190,10 +196,12 @@ export async function handleSessionEnd(): Promise<void> {
     // =====================================================
     const instanceId = getClaudeInstanceId();
     const queuedMessages = getQueuedMessages(cwd);  // Filter by current session's cwd
+    logHook("session-end", `Processing ${queuedMessages.length} queued messages`);
     if (queuedMessages.length > 0) {
       // Skip oversized messages (likely pastes/dumps, not useful observations)
       const validMessages = queuedMessages.filter((msg) => msg.content.length < 5000);
       if (validMessages.length > 0) {
+        logApiCall("sessions.messages.create", "POST", `${validMessages.length} queued user messages`);
         const userMessages = validMessages.map((msg) => ({
           content: msg.content,
           peer_id: config.peerName,
@@ -219,6 +227,7 @@ export async function handleSessionEnd(): Promise<void> {
 
       // Upload assistant messages for clawd peer knowledge extraction
       if (assistantMessages.length > 0) {
+        logApiCall("sessions.messages.create", "POST", `${assistantMessages.length} assistant messages`);
         const messagesToSend = assistantMessages.map((msg) => ({
           content: msg.content,
           peer_id: config.claudePeer,
@@ -268,9 +277,11 @@ export async function handleSessionEnd(): Promise<void> {
       ],
     });
 
+    logHook("session-end", `Session saved: ${assistantMessages.length} assistant msgs, ${queuedMessages.length} queued msgs`);
     console.log(`[honcho-clawd] Session saved: ${assistantMessages.length} assistant messages, ${queuedMessages.length} queued messages processed`);
     process.exit(0);
   } catch (error) {
+    logHook("session-end", `Error: ${error}`, { error: String(error) });
     console.error(`[honcho-clawd] Warning: ${error}`);
     process.exit(1);
   }

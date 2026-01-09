@@ -9,7 +9,12 @@ import { blocks, circles } from "./unicode.js";
 // ANSI color codes
 const c = {
   reset: "\x1b[0m",
-  // Foreground colors
+  // Foreground colors - light blue gradient
+  blue1: "\x1b[38;5;117m",   // light blue (main)
+  blue2: "\x1b[38;5;81m",    // sky blue (accent)
+  blue3: "\x1b[38;5;159m",   // pale blue (highlight)
+  blue4: "\x1b[38;5;153m",   // soft cyan
+  // Legacy peach colors (for backwards compat)
   peach: "\x1b[38;5;216m",
   salmon: "\x1b[38;5;209m",
   orange: "\x1b[38;5;208m",
@@ -31,6 +36,7 @@ const B = {
   full: blocks.full,           // █
   upper: blocks.upperHalf,     // ▀
   lower: blocks.lowerHalf,     // ▄
+  lower2_8: blocks.lower2_8,   // ▂
 };
 
 // Circle for eyes
@@ -96,23 +102,54 @@ export function renderHonchoCompact(): string[] {
 }
 
 /**
- * Honcho gradient version - simple peachy blob with eyes
- * Clean 3-row design optimized for terminal rendering
+ * Honcho gradient version - light blue blob with saluting arm
+ * 4-row design with a clear salute gesture (hand touching forehead) + face
  */
 export function renderHonchoGradient(): string[] {
-  const o = c.orange;      // outer glow
-  const p = c.peach;       // main body
-  const s = c.salmon;      // edge accent
-  const e = c.black;       // eyes (high contrast)
-  const b = c.cream;       // mouth/smile area
+  // Pixel-grid version (2 spaces per pixel) to match the SVG/pixel vibe and avoid
+  // block-drawing oddities across terminals/fonts.
   const r = c.reset;
+  const bg = (n: number) => `\x1b[48;5;${n}m`;
 
-  // Simplified peachy blob face - rounder, clearer eyes
-  return [
-    `  ${o}${B.lower}${s}${B.full}${B.full}${B.full}${B.full}${o}${B.lower}${r}  `,
-    ` ${s}${B.full}${e}${eye}${p}${B.full}${B.full}${e}${eye}${s}${B.full}${r} `,
-    `  ${o}${B.upper}${b}${B.lower}${B.lower}${B.lower}${B.lower}${o}${B.upper}${r}  `,
+  const P = {
+    empty: "  ",
+    outline: `${bg(236)}  ${r}`,     // dark outline
+    body: `${bg(117)}  ${r}`,        // sky blue fill
+    hi: `${bg(159)}  ${r}`,          // pale highlight (hand/shine)
+    eye: `${bg(16)}  ${r}`,          // black eyes/mouth
+  } as const;
+
+  // 9x8 grid (each char = one pixel; rendered as 2-space squares)
+  // Legend: ' ' empty, 'O' outline, 'B' body, 'H' highlight, 'E' eye, 'M' mouth
+  const grid = [
+    "     HHO ", // hand (top-right)
+    "  OBBBBHO", // head top + forearm
+    " OBBBBBHO", // forehead/arm connection
+    " OBBE BEO", // eyes row 1
+    " OBBE BEO", // eyes row 2 (taller eyes like your screenshot)
+    " OBBBMMBO", // mouth row (subtle)
+    "  OBBBB O", // taper
+    "   OOO   ", // bottom
   ];
+
+  const renderRow = (row: string) =>
+    row
+      .split("")
+      .map((ch) => {
+        if (ch === "O") return P.outline;
+        if (ch === "B") return P.body;
+        if (ch === "H") return P.hi;
+        if (ch === "E" || ch === "M") return P.eye;
+        return P.empty;
+      })
+      .join("");
+
+  return grid.map(renderRow);
+}
+
+function visibleWidth(s: string): number {
+  // Strip ANSI color codes, then measure remaining characters.
+  return s.replace(/\x1b\[[0-9;]*m/g, "").length;
 }
 
 /**
@@ -236,12 +273,17 @@ export function displayHonchoStartup(label?: string, subtitle?: string, extra?: 
   const labelText = label || "Honcho Memory";
   const subtitleText = subtitle || "persistent context";
 
+  // Pad all art lines to a consistent visible width so right-hand text aligns cleanly.
+  const maxWidth = Math.max(...lines.map(visibleWidth));
+
   // Format with label to the right (like Claude Code does)
   const output = lines.map((line, i) => {
-    if (i === 0) return `${line}  ${c.pale}${labelText}${c.reset}`;
-    if (i === 1) return `${line}  ${c.dim}${subtitleText}${c.reset}`;
-    if (i === 2 && extra) return `${line}  ${c.dim}${extra}${c.reset}`;
-    return line;
+    const pad = " ".repeat(Math.max(0, maxWidth - visibleWidth(line)));
+    const padded = `${line}${pad}`;
+    if (i === 0) return `${padded}  ${c.pale}${labelText}${c.reset}`;
+    if (i === 1) return `${padded}  ${c.dim}${subtitleText}${c.reset}`;
+    if (i === 2 && extra) return `${padded}  ${c.dim}${extra}${c.reset}`;
+    return padded;
   });
 
   return output.join("\n");

@@ -10,6 +10,7 @@ import {
   setCachedSessionId,
 } from "../cache.js";
 import { Spinner } from "../spinner.js";
+import { logHook, logApiCall, setLogContext } from "../log.js";
 
 const WORKSPACE_APP_TAG = "honcho-clawd";
 
@@ -135,6 +136,11 @@ export async function handlePreCompact(): Promise<void> {
   const cwd = hookInput.cwd || process.cwd();
   const trigger = hookInput.trigger || "auto";
 
+  // Set log context
+  setLogContext(cwd, getSessionName(cwd));
+
+  logHook("pre-compact", `Compaction triggered (${trigger})`);
+
   // Show spinner for auto compaction (context window full)
   const spinner = new Spinner({ style: "neural" });
   if (trigger === "auto") {
@@ -185,6 +191,10 @@ export async function handlePreCompact(): Promise<void> {
     if (trigger === "auto") {
       spinner.update("fetching memory context");
     }
+
+    logApiCall("peers.getContext", "GET", `${config.peerName} + ${config.claudePeer}`);
+    logApiCall("sessions.summaries", "GET", sessionName);
+    logApiCall("peers.chat", "POST", "dialectic queries x2");
 
     // Fetch ALL context in parallel - this is the RIGHT time for expensive calls
     // because the context is about to be reset anyway
@@ -242,11 +252,14 @@ export async function handlePreCompact(): Promise<void> {
       spinner.stop("memory anchored");
     }
 
+    logHook("pre-compact", `Memory anchored (${memoryCard.length} chars)`);
+
     // Output the memory card - this gets included in pre-compaction context
     // and will be preserved in the summary
     console.log(`[${config.claudePeer}/Honcho Memory Anchor]\n\n${memoryCard}`);
     process.exit(0);
   } catch (error) {
+    logHook("pre-compact", `Error: ${error}`, { error: String(error) });
     if (trigger === "auto") {
       spinner.fail("memory anchor failed");
     }

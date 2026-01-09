@@ -87,3 +87,31 @@ export const symbols = {
   corner: String.fromCodePoint(0x2514),       // └
   pipe: String.fromCodePoint(0x2502),         // │
 };
+
+// Arrow characters
+export const arrows = {
+  right: String.fromCodePoint(0x2192),        // →
+  left: String.fromCodePoint(0x2190),         // ←
+  up: String.fromCodePoint(0x2191),           // ↑
+  down: String.fromCodePoint(0x2193),         // ↓
+  rightDouble: String.fromCodePoint(0x21D2),  // ⇒
+  leftDouble: String.fromCodePoint(0x21D0),   // ⇐
+  rightHook: String.fromCodePoint(0x21AA),    // ↪
+  leftHook: String.fromCodePoint(0x21A9),     // ↩
+};
+
+// Box drawing characters for visual hierarchy
+export const box = {
+  horizontal: String.fromCodePoint(0x2500),   // ─
+  vertical: String.fromCodePoint(0x2502),     // │
+  topLeft: String.fromCodePoint(0x250C),      // ┌
+  topRight: String.fromCodePoint(0x2510),     // ┐
+  bottomLeft: String.fromCodePoint(0x2514),   // └
+  bottomRight: String.fromCodePoint(0x2518),  // ┘
+  branchRight: String.fromCodePoint(0x251C),  // ├
+  branchLeft: String.fromCodePoint(0x2524),   // ┤
+  branchDown: String.fromCodePoint(0x252C),   // ┬
+  branchUp: String.fromCodePoint(0x2534),     // ┴
+  cross: String.fromCodePoint(0x253C),        // ┼
+  cornerRight: String.fromCodePoint(0x2514),  // └ (alias for bottomLeft)
+};

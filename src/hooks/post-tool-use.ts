@@ -11,6 +11,7 @@ import {
   appendClawdWork,
   getClaudeInstanceId,
 } from "../cache.js";
+import { logHook, logApiCall, setLogContext } from "../log.js";
 
 const WORKSPACE_APP_TAG = "honcho-clawd";
 
@@ -93,11 +94,15 @@ export async function handlePostToolUse(): Promise<void> {
   const toolResponse = hookInput.tool_response || {};
   const cwd = hookInput.cwd || process.cwd();
 
+  // Set log context
+  setLogContext(cwd, getSessionName(cwd));
+
   if (!shouldLogTool(toolName, toolInput)) {
     process.exit(0);
   }
 
   const summary = formatToolSummary(toolName, toolInput, toolResponse);
+  logHook("post-tool-use", summary, { tool: toolName });
 
   // INSTANT: Update local clawd context file (~2ms)
   appendClawdWork(summary);
@@ -144,6 +149,7 @@ async function logToHonchoAsync(config: any, cwd: string, summary: string): Prom
   }
 
   // Log the tool use with instance_id for parallel session support
+  logApiCall("sessions.messages.create", "POST", `tool: ${summary.slice(0, 50)}`);
   const instanceId = getClaudeInstanceId();
   await client.workspaces.sessions.messages.create(workspaceId, sessionId, {
     messages: [

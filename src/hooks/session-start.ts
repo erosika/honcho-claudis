@@ -22,6 +22,7 @@ import {
 import { Spinner } from "../spinner.js";
 import { displayHonchoStartup } from "../pixel.js";
 import { captureGitState, getRecentCommits, formatGitContext, isGitRepo, inferFeatureContext, formatFeatureContext } from "../git.js";
+import { logHook, logApiCall, logCache, logFlow, logAsync, setLogContext } from "../log.js";
 
 const WORKSPACE_APP_TAG = "honcho-clawd";
 
@@ -87,6 +88,10 @@ export async function handleSessionStart(): Promise<void> {
     setClaudeInstanceId(claudeInstanceId);
   }
 
+  // Set log context early so all logs include cwd/session
+  const sessionName = getSessionName(cwd);
+  setLogContext(cwd, sessionName);
+
   // Reset message count for this session (for threshold-based knowledge graph refresh)
   resetMessageCount();
 
@@ -109,18 +114,26 @@ export async function handleSessionStart(): Promise<void> {
   spinner.start("loading memory");
 
   try {
+    logHook("session-start", `Starting session in ${cwd}`, { branch: currentGitState?.branch });
+    logFlow("init", `workspace: ${config.workspace}, peers: ${config.peerName}/${config.claudePeer}`);
     const client = new Honcho(getHonchoClientOptions(config));
 
     // Step 1: Get or create workspace (use cache if available)
     spinner.update("Connecting to workspace");
     let workspaceId = getCachedWorkspaceId(config.workspace);
-    if (!workspaceId) {
+    if (workspaceId) {
+      logCache("hit", "workspace", config.workspace);
+    } else {
+      logCache("miss", "workspace", "fetching from Honcho");
+      const startTime = Date.now();
       const workspace = await client.workspaces.getOrCreate({
         id: config.workspace,
         metadata: { app: WORKSPACE_APP_TAG },
       });
       workspaceId = workspace.id;
       setCachedWorkspaceId(config.workspace, workspaceId);
+      logApiCall("workspaces.getOrCreate", "POST", config.workspace, Date.now() - startTime, true);
+      logCache("write", "workspace", workspaceId.slice(0, 8));
     }
 
     // Step 2: Get or create session (use cache if available)
@@ -143,41 +156,60 @@ export async function handleSessionStart(): Promise<void> {
       sessionMetadata.feature_confidence = featureContext.confidence;
     }
 
-    if (!sessionId) {
+    if (sessionId) {
+      logCache("hit", "session", sessionName);
+      // Update session metadata with current git state (fire-and-forget)
+      logApiCall("sessions.update", "PUT", `metadata for ${sessionName}`);
+      client.workspaces.sessions.update(workspaceId, sessionId, { metadata: sessionMetadata }).catch(() => {});
+    } else {
+      logCache("miss", "session", "fetching from Honcho");
+      const startTime = Date.now();
       const session = await client.workspaces.sessions.getOrCreate(workspaceId, {
         id: sessionName,
         metadata: sessionMetadata,
       });
       sessionId = session.id;
       setCachedSessionId(cwd, sessionName, sessionId);
-    } else {
-      // Update session metadata with current git state (fire-and-forget)
-      client.workspaces.sessions.update(workspaceId, sessionId, { metadata: sessionMetadata }).catch(() => {});
+      logApiCall("sessions.getOrCreate", "POST", sessionName, Date.now() - startTime, true);
+      logCache("write", "session", sessionId.slice(0, 8));
     }
 
     // Step 3: Get or create peers (use cache if available)
     let userPeerId = getCachedPeerId(config.peerName);
     let clawdPeerId = getCachedPeerId(config.claudePeer);
 
+    if (userPeerId) {
+      logCache("hit", "peer", config.peerName);
+    }
+    if (clawdPeerId) {
+      logCache("hit", "peer", config.claudePeer);
+    }
+
     const peerPromises: Promise<any>[] = [];
     if (!userPeerId) {
+      logCache("miss", "peer", config.peerName);
       peerPromises.push(
         client.workspaces.peers.getOrCreate(workspaceId, { id: config.peerName }).then((p) => {
           userPeerId = p.id;
           setCachedPeerId(config.peerName, p.id);
+          logCache("write", "peer", config.peerName);
         })
       );
     }
     if (!clawdPeerId) {
+      logCache("miss", "peer", config.claudePeer);
       peerPromises.push(
         client.workspaces.peers.getOrCreate(workspaceId, { id: config.claudePeer }).then((p) => {
           clawdPeerId = p.id;
           setCachedPeerId(config.claudePeer, p.id);
+          logCache("write", "peer", config.claudePeer);
         })
       );
     }
     if (peerPromises.length > 0) {
+      const startTime = Date.now();
       await Promise.all(peerPromises);
+      logApiCall("peers.getOrCreate", "POST", `${peerPromises.length} peers`, Date.now() - startTime, true);
     }
 
     // Step 4: Set session peers (fire-and-forget)
@@ -225,6 +257,7 @@ export async function handleSessionStart(): Promise<void> {
 
     // Step 5: PARALLEL fetch all context (the big optimization!)
     spinner.update("Fetching memory context");
+    logAsync("context-fetch", "Starting 5 parallel context fetches");
     const contextParts: string[] = [];
 
     // Header with git context
@@ -292,6 +325,7 @@ export async function handleSessionStart(): Promise<void> {
       : "";
 
     // Parallel API calls for rich context
+    const fetchStart = Date.now();
     const [userContextResult, clawdContextResult, summariesResult, userChatResult, clawdChatResult] =
       await Promise.allSettled([
         // 1. Get user's context (with metadata filtering for relevant observations)
@@ -318,10 +352,23 @@ export async function handleSessionStart(): Promise<void> {
         }),
       ]);
 
+    // Log async results
+    const fetchDuration = Date.now() - fetchStart;
+    const asyncResults = [
+      { name: "peers.getContext(user)", success: userContextResult.status === "fulfilled" },
+      { name: "peers.getContext(clawd)", success: clawdContextResult.status === "fulfilled" },
+      { name: "sessions.summaries", success: summariesResult.status === "fulfilled" },
+      { name: "peers.chat(user)", success: userChatResult.status === "fulfilled" },
+      { name: "peers.chat(clawd)", success: clawdChatResult.status === "fulfilled" },
+    ];
+    const successCount = asyncResults.filter(r => r.success).length;
+    logAsync("context-fetch", `Completed: ${successCount}/5 succeeded in ${fetchDuration}ms`, asyncResults);
+
     // Process user context
     if (userContextResult.status === "fulfilled" && userContextResult.value) {
       const context = userContextResult.value;
       setCachedUserContext(context); // Cache for user-prompt hook
+      logCache("write", "userContext", `${context.representation?.explicit?.length || 0} facts`);
 
       if (context.peer_card && context.peer_card.length > 0) {
         contextParts.push(`## ${config.peerName}'s Profile\n${context.peer_card.join("\n")}`);
@@ -339,6 +386,7 @@ export async function handleSessionStart(): Promise<void> {
     if (clawdContextResult.status === "fulfilled" && clawdContextResult.value) {
       const context = clawdContextResult.value;
       setCachedClawdContext(context); // Cache
+      logCache("write", "clawdContext", `${context.representation?.explicit?.length || 0} facts`);
 
       if (context.representation) {
         const repText = formatRepresentation(context.representation);
@@ -372,6 +420,8 @@ export async function handleSessionStart(): Promise<void> {
     // Stop spinner and display pixel art
     spinner.stop();
 
+    logFlow("complete", `Memory loaded: ${contextParts.length} sections, ${successCount}/5 API calls succeeded`);
+
     // Display Honcho pixel character with startup message
     console.log(displayHonchoStartup("Honcho Memory"));
 
@@ -379,6 +429,7 @@ export async function handleSessionStart(): Promise<void> {
     console.log(`\n[${config.claudePeer}/Honcho Memory Loaded]\n\n${contextParts.join("\n\n")}`);
     process.exit(0);
   } catch (error) {
+    logHook("session-start", `Error: ${error}`, { error: String(error) });
     spinner.fail("memory load failed");
     console.error(`[honcho-clawd] ${error}`);
     process.exit(1);

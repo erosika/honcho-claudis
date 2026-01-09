@@ -26,6 +26,7 @@ import { handlePreCompact } from "./hooks/pre-compact.js";
 import * as s from "./styles.js";
 import { previewAll as previewPixel } from "./pixel.js";
 import { handleHandoff } from "./skills/handoff.js";
+import { getRecentLogs, watchLogs, formatLogEntry, clearLogs, getLogPath, printLegend, LogFilter } from "./log.js";
 // import { handleCerebras } from "./skills/cerebras.js";  // Disabled for now
 
 const VERSION = "0.1.0";
@@ -918,6 +919,87 @@ Session Management Commands:
 }
 
 // ============================================
+// Tail Command - Live Activity Log
+// ============================================
+
+async function handleTail(args: string[]): Promise<void> {
+  const subcommand = args[0];
+
+  if (subcommand === "clear") {
+    clearLogs();
+    console.log(s.success("Activity log cleared"));
+    return;
+  }
+
+  if (subcommand === "path") {
+    console.log(getLogPath());
+    return;
+  }
+
+  if (subcommand === "legend" || subcommand === "help") {
+    printLegend();
+    return;
+  }
+
+  const follow = args.includes("-f") || args.includes("--follow") || !subcommand;
+  const showAll = args.includes("-a") || args.includes("--all");
+  const countArg = args.find(a => a.startsWith("-n"));
+  const count = countArg ? parseInt(countArg.slice(2)) || 50 : 50;
+
+  // Build filter - DEFAULT is current directory, -a for all
+  const filter: LogFilter = {};
+  if (!showAll) {
+    filter.cwd = process.cwd();
+  }
+
+  const showSession = showAll; // Only show session tag when viewing all
+
+  console.log("");
+  console.log(s.header("honcho-clawd activity"));
+  if (showAll) {
+    console.log(s.dim("all sessions"));
+  }
+
+  console.log("");
+
+  // Show recent logs first
+  const recent = getRecentLogs(count, Object.keys(filter).length > 0 ? filter : undefined);
+  if (recent.length === 0) {
+    console.log(s.dim("No activity yet. Start a Claude session to see logs."));
+    console.log("");
+  } else {
+    recent.forEach(entry => console.log(formatLogEntry(entry, { showSession })));
+  }
+
+  if (follow) {
+    console.log("");
+    console.log(s.dim("Watching for new activity... (Ctrl+C to stop)"));
+    console.log("");
+
+    // Watch for new entries
+    const stopWatching = watchLogs((entries) => {
+      // Apply filter to new entries
+      let filtered = entries;
+      if (filter.cwd) {
+        filtered = filtered.filter(e => e.cwd === filter.cwd);
+      }
+      filtered.forEach(entry => console.log(formatLogEntry(entry, { showSession })));
+    });
+
+    // Handle Ctrl+C
+    process.on("SIGINT", () => {
+      stopWatching();
+      console.log("");
+      console.log(s.dim("Stopped watching."));
+      process.exit(0);
+    });
+
+    // Keep process alive
+    await new Promise(() => {});
+  }
+}
+
+// ============================================
 // Endpoint Commands (SaaS vs Local)
 // ============================================
 
@@ -1041,6 +1123,11 @@ function showHelp(): void {
   console.log(`  ${s.highlight("handoff")}                Generate research handoff summary`);
   console.log(`  ${s.highlight("handoff")} --all          Include all instances (not just current)`);
   console.log("");
+  console.log(s.section("Debugging"));
+  console.log(`  ${s.highlight("tail")}                   Live activity log`);
+  console.log(`  ${s.highlight("tail")} -a               All sessions`);
+  console.log(`  ${s.highlight("tail")} clear            Clear log`);
+  console.log("");
   console.log(s.dim("Learn more: https://docs.honcho.dev"));
   console.log("");
 }
@@ -1095,6 +1182,12 @@ switch (command) {
     break;
   case "handoff":
     await handleHandoff(args.slice(1));
+    break;
+  case "tail":
+    await handleTail(args.slice(1));
+    break;
+  case "logs":
+    await handleTail(args.slice(1));
     break;
   // case "cerebras":
   // case "fast":

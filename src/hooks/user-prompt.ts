@@ -16,6 +16,7 @@ import {
   markKnowledgeGraphRefreshed,
   getClaudeInstanceId,
 } from "../cache.js";
+import { formatPromptContext, type UserContext } from "../context-format.js";
 import { logHook, logApiCall, logCache, logFlow, setLogContext } from "../log.js";
 
 interface HookInput {
@@ -102,9 +103,9 @@ export async function handleUserPrompt(): Promise<void> {
   if (cachedContext && !cacheIsStale && !forceRefresh) {
     // Use cached context - instant response
     logCache("hit", "userContext", "using cached");
-    const contextParts = formatCachedContext(cachedContext, config.peerName);
-    if (contextParts.length > 0) {
-      outputContext(config.peerName, contextParts);
+    const contextStr = formatCachedContext(cachedContext, config.peerName);
+    if (contextStr) {
+      outputContextString(contextStr);
     }
     if (uploadPromise) await uploadPromise.catch(() => {});
     process.exit(0);
@@ -115,9 +116,9 @@ export async function handleUserPrompt(): Promise<void> {
   // 2. Message threshold reached (every 10 messages)
   logCache("miss", "userContext", forceRefresh ? "threshold refresh" : "stale cache");
   try {
-    const contextParts = await fetchFreshContext(config, cwd, prompt);
-    if (contextParts.length > 0) {
-      outputContext(config.peerName, contextParts);
+    const contextStr = await fetchFreshContext(config, cwd, prompt);
+    if (contextStr) {
+      outputContextString(contextStr);
     }
     // Mark that we refreshed the knowledge graph
     if (forceRefresh) {
@@ -166,33 +167,26 @@ async function uploadMessageAsync(config: any, cwd: string, prompt: string): Pro
   });
 }
 
-function formatCachedContext(context: any, peerName: string): string[] {
-  const parts: string[] = [];
+/**
+ * Format cached context using the new compact format
+ */
+function formatCachedContext(context: any, peerName: string): string {
+  // Convert API response to UserContext type
+  const userContext: UserContext = {
+    peerCard: context?.peer_card,
+    explicit: context?.representation?.explicit?.map((e: any) => ({
+      content: typeof e === "string" ? e : e.content,
+    })),
+    deductive: context?.representation?.deductive?.map((d: any) => ({
+      conclusion: d.conclusion,
+      premises: d.premises,
+    })),
+  };
 
-  if (context?.representation?.explicit?.length) {
-    const explicit = context.representation.explicit
-      .slice(0, 5)
-      .map((e: any) => e.content || e)
-      .join("; ");
-    parts.push(`Relevant facts: ${explicit}`);
-  }
-
-  if (context?.representation?.deductive?.length) {
-    const deductive = context.representation.deductive
-      .slice(0, 3)
-      .map((d: any) => d.conclusion)
-      .join("; ");
-    parts.push(`Insights: ${deductive}`);
-  }
-
-  if (context?.peer_card?.length) {
-    parts.push(`Profile: ${context.peer_card.join("; ")}`);
-  }
-
-  return parts;
+  return formatPromptContext(peerName, userContext);
 }
 
-async function fetchFreshContext(config: any, cwd: string, prompt: string): Promise<string[]> {
+async function fetchFreshContext(config: any, cwd: string, prompt: string): Promise<string> {
   const client = new Honcho(getHonchoClientOptions(config));
 
   // Try to use cached IDs
@@ -205,7 +199,7 @@ async function fetchFreshContext(config: any, cwd: string, prompt: string): Prom
   const userPeerId = getCachedPeerId(config.peerName);
   if (!userPeerId) {
     // Can't fetch context without peer ID
-    return [];
+    return "";
   }
 
   const sessionName = getSessionName(cwd);
@@ -214,8 +208,6 @@ async function fetchFreshContext(config: any, cwd: string, prompt: string): Prom
     const session = await client.workspaces.sessions.getOrCreate(workspaceId, { id: sessionName });
     sessionId = session.id;
   }
-
-  const contextParts: string[] = [];
 
   // Only use getContext() here - it's free/cheap and returns pre-computed knowledge
   // Skip chat() ($0.03 per call) - only use at session-start
@@ -233,36 +225,20 @@ async function fetchFreshContext(config: any, cwd: string, prompt: string): Prom
   if (contextResult) {
     setCachedUserContext(contextResult); // Update cache
     logCache("write", "userContext", `${contextResult.representation?.explicit?.length || 0} facts`);
-
-    if (contextResult.representation?.explicit?.length) {
-      const explicit = contextResult.representation.explicit
-        .slice(0, 5)
-        .map((e: any) => e.content || e)
-        .join("; ");
-      contextParts.push(`Relevant facts: ${explicit}`);
-    }
-
-    if (contextResult.representation?.deductive?.length) {
-      const deductive = contextResult.representation.deductive
-        .slice(0, 3)
-        .map((d: any) => d.conclusion)
-        .join("; ");
-      contextParts.push(`Insights: ${deductive}`);
-    }
-
-    if (contextResult.peer_card?.length) {
-      contextParts.push(`Profile: ${contextResult.peer_card.join("; ")}`);
-    }
+    return formatCachedContext(contextResult, config.peerName);
   }
 
-  return contextParts;
+  return "";
 }
 
-function outputContext(peerName: string, contextParts: string[]): void {
+/**
+ * Output context string in Claude Code hook format
+ */
+function outputContextString(contextStr: string): void {
   const output = {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: `[Honcho Memory for ${peerName}]: ${contextParts.join(" | ")}`,
+      additionalContext: contextStr,
     },
   };
   console.log(JSON.stringify(output));

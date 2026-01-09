@@ -8,10 +8,15 @@ export interface MessageUploadConfig {
   summarizeAssistant?: boolean; // Summarize assistant messages instead of full text (default: false)
 }
 
+export type ContextTier = "essential" | "extended" | "deep";
+
 export interface ContextRefreshConfig {
   messageThreshold?: number; // Refresh every N messages (default: 50)
   ttlSeconds?: number; // Cache TTL in seconds (default: 300)
   skipDialectic?: boolean; // Skip chat() calls in user-prompt (default: true, saves $0.03/call)
+  dialecticCacheTtlHours?: number; // Cache dialectic responses for N hours (default: 2)
+  tier?: ContextTier; // Context tier: "essential" (~300 tokens), "extended" (~800), "deep" (~2000)
+  compressedFormat?: boolean; // Use compact key-value format instead of verbose markdown
 }
 
 export interface LocalContextConfig {
@@ -127,6 +132,9 @@ export function getContextRefreshConfig(): ContextRefreshConfig {
     messageThreshold: config?.contextRefresh?.messageThreshold ?? 30, // Every 30 messages
     ttlSeconds: config?.contextRefresh?.ttlSeconds ?? 300, // 5 minutes
     skipDialectic: config?.contextRefresh?.skipDialectic ?? true, // Skip by default to save $0.03/call
+    dialecticCacheTtlHours: config?.contextRefresh?.dialecticCacheTtlHours ?? 2, // 2 hours
+    tier: config?.contextRefresh?.tier ?? "deep", // Full context by default
+    compressedFormat: config?.contextRefresh?.compressedFormat ?? false, // Verbose by default
   };
 }
 

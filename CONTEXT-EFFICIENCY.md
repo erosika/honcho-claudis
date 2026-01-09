@@ -2,6 +2,41 @@
 
 > Deep research on optimizing honcho-clawd's context management for LLM consumption.
 
+## Implementation Status
+
+### Completed (auto-experiments branch)
+
+1. **Dialectic Response Caching** - `src/cache.ts`
+   - 2-hour TTL for cached `peers.chat()` responses
+   - Saves $0.06 per session when cache is warm
+   - Functions: `getCachedUserDialectic()`, `setCachedUserDialectic()`, etc.
+
+2. **Context Compression Module** - `src/context-format.ts`
+   - Tiered context budgets: essential (~300 tokens), extended (~800), deep (~2000)
+   - Compact key-value format option for 60% token reduction
+   - `formatPromptContext()` for ultra-compact per-prompt injection
+   - `formatMemoryAnchor()` for pre-compact PRESERVE markers
+   - `deduplicateFacts()` for semantic deduplication
+
+3. **Message Batching Utilities** - `src/cache.ts`
+   - `getMessageBatches()` for efficient API uploads (up to 100 per batch)
+   - `getPendingMessageCount()` for queue monitoring
+
+4. **Configuration Extensions** - `src/config.ts`
+   - `contextRefresh.tier`: "essential" | "extended" | "deep"
+   - `contextRefresh.compressedFormat`: boolean
+   - `contextRefresh.dialecticCacheTtlHours`: number
+
+5. **Hook Updates**
+   - `session-start.ts`: Uses dialectic caching, logs cost savings
+   - `user-prompt.ts`: Uses `formatPromptContext()` for compact output
+
+### Pending (Future Work)
+
+- Tiered context loading in session-start hook
+- Message batch upload at session-end
+- A/B testing framework for context strategies
+
 ## Executive Summary
 
 This document analyzes how honcho-clawd currently leverages Claude Code and Honcho, identifying opportunities for more efficient context representation, tokenization, and LLM-digestible formatting.

@@ -38,6 +38,7 @@ Give Claude Code long-term memory that survives context wipes, session restarts,
 - [Performance](#performance)
 - [AI Self-Awareness](#ai-self-awareness)
 - [Reliability](#reliability)
+- [Activity Logging](#activity-logging)
 - [CLI Reference](#cli-reference)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
@@ -497,6 +498,32 @@ Session: my-project
 
 ---
 
+## Activity Logging
+
+Monitor honcho-clawd activity in real-time for debugging and understanding the memory system.
+
+```bash
+# Live activity log (current directory)
+honcho-clawd tail
+
+# All sessions
+honcho-clawd tail -a
+
+# Show last N entries without following
+honcho-clawd tail -n100 --no-follow
+
+# Clear log / show path / show legend
+honcho-clawd tail clear
+honcho-clawd tail path
+honcho-clawd tail legend
+```
+
+Log types: `HOOK` (lifecycle), `API` (Honcho calls + timing), `CACHE` (hit/miss), `FLOW` (state), `ASYNC` (parallel ops), `ERROR`, `DEBUG`.
+
+Log location: `~/.honcho-clawd/activity.log` (auto-rotates at 100KB).
+
+---
+
 ## CLI Reference
 
 ```
@@ -527,6 +554,19 @@ Endpoint Commands:
 Skills:
   handoff                Generate research handoff summary
   handoff --all          Include all instances (not just current)
+
+Debugging:
+  tail                   Live activity log (current directory)
+  tail -a                Live activity log (all sessions)
+  tail -n50              Show last N entries
+  tail --no-follow       Show logs without watching for new entries
+  tail clear             Clear the activity log
+  tail path              Show log file path
+  tail legend            Show log type legend
+
+Cache:
+  cache                  Show current cache state
+  cache clear            Clear all cached IDs (forces re-fetch)
 
 Hook Commands (internal - called by Claude Code):
   hook session-start    Handle SessionStart event

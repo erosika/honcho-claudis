@@ -104,8 +104,8 @@ function summarizeEdit(oldStr: string, newStr: string, filePath: string): string
   }
 
   // Look for meaningful changes
-  const oldTokens = oldStr.match(/\w+/g) || [];
-  const newTokens = newStr.match(/\w+/g) || [];
+  const oldTokens: string[] = oldStr.match(/\w+/g) ?? [];
+  const newTokens: string[] = newStr.match(/\w+/g) ?? [];
 
   // Find added/removed identifiers
   const added = newTokens.filter(t => !oldTokens.includes(t) && t.length > 2);
@@ -251,8 +251,10 @@ async function logToHonchoAsync(config: any, cwd: string, summary: string): Prom
 
   await session.addMessages([
     claudePeer.message(`[Tool] ${summary}`, {
-      instance_id: instanceId || undefined,
-      session_affinity: sessionName,
+      metadata: {
+        instance_id: instanceId || undefined,
+        session_affinity: sessionName,
+      },
     }),
   ]);
 }

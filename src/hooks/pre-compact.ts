@@ -161,13 +161,13 @@ export async function handlePreCompact(): Promise<void> {
       await Promise.allSettled([
         // User's full context
         userPeer.context({
-          maxObservations: 30,
-          includeMostDerived: true,
+          maxConclusions: 30,
+          includeMostFrequent: true,
         }),
         // Claude's self-context
         claudePeer.context({
-          maxObservations: 20,
-          includeMostDerived: true,
+          maxConclusions: 20,
+          includeMostFrequent: true,
         }),
         // Session summaries
         session.summaries(),
@@ -188,12 +188,12 @@ export async function handlePreCompact(): Promise<void> {
     const claudeContext = claudeContextResult.status === "fulfilled" ? claudeContextResult.value : null;
     const summaries = summariesResult.status === "fulfilled" ? summariesResult.value : null;
     const userDialectic =
-      userChatResult.status === "fulfilled" && userChatResult.value?.content
-        ? userChatResult.value.content
+      userChatResult.status === "fulfilled"
+        ? userChatResult.value
         : null;
     const claudeDialectic =
-      claudeChatResult.status === "fulfilled" && claudeChatResult.value?.content
-        ? claudeChatResult.value.content
+      claudeChatResult.status === "fulfilled"
+        ? claudeChatResult.value
         : null;
 
     // Format the memory card

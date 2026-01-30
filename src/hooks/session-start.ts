@@ -162,11 +162,13 @@ export async function handleSessionStart(): Promise<void> {
         .filter((c) => c.type !== "initial") // Don't log initial state as observation
         .map((change) =>
           userPeer.message(`[Git External] ${change.description}`, {
-            type: "git_change",
-            change_type: change.type,
-            from: change.from,
-            to: change.to,
-            external: true,
+            metadata: {
+              type: "git_change",
+              change_type: change.type,
+              from: change.from,
+              to: change.to,
+              external: true,
+            },
           })
         );
 
@@ -252,15 +254,13 @@ export async function handleSessionStart(): Promise<void> {
       await Promise.allSettled([
         // 1. Get user's context (SESSION-SCOPED for relevance)
         userPeer.context({
-          maxObservations: 25,
-          includeMostDerived: true,
-          sessionName,  // Scope to current project/session
+          maxConclusions: 25,
+          includeMostFrequent: true,
         }),
         // 2. Get claude's context (self-awareness, also session-scoped)
         claudePeer.context({
-          maxObservations: 15,
-          includeMostDerived: true,
-          sessionName,  // Scope to current project/session
+          maxConclusions: 15,
+          includeMostFrequent: true,
         }),
         // 3. Get session summaries
         session.summaries(),
@@ -351,27 +351,19 @@ export async function handleSessionStart(): Promise<void> {
       // Skip long_summary - it overlaps with facts and adds too many tokens
     }
 
-    // AI dialectic summaries - only include if facts are sparse
-    // These cost $0.03 each but often overlap with facts we already have
-    const userCtx = userContextResult.status === "fulfilled" ? userContextResult.value as any : null;
-    const claudeCtx = claudeContextResult.status === "fulfilled" ? claudeContextResult.value as any : null;
-    const hasGoodUserFacts = (userCtx?.representation?.explicit?.length || 0) >= 5;
-    const hasGoodClaudeFacts = (claudeCtx?.representation?.explicit?.length || 0) >= 3;
-
-    // Only show AI Summary if we don't have enough facts
+    // AI dialectic summaries - always include when available
     // Chat result may be a string or {content: string}
     const userChatContent = userChatResult.status === "fulfilled"
       ? (typeof userChatResult.value === "string" ? userChatResult.value : (userChatResult.value as any)?.content)
       : null;
-    if (!hasGoodUserFacts && userChatContent) {
+    if (userChatContent) {
       contextParts.push(`## AI Summary of ${config.peerName}\n${userChatContent}`);
     }
 
-    // Only show AI Self-Reflection if we don't have enough claude facts
     const claudeChatContent = claudeChatResult.status === "fulfilled"
       ? (typeof claudeChatResult.value === "string" ? claudeChatResult.value : (claudeChatResult.value as any)?.content)
       : null;
-    if (!hasGoodClaudeFacts && claudeChatContent) {
+    if (claudeChatContent) {
       contextParts.push(`## AI Self-Reflection (What ${config.claudePeer} Has Been Doing)\n${claudeChatContent}`);
     }
 

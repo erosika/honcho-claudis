@@ -189,8 +189,10 @@ async function uploadMessageAsync(config: any, cwd: string, prompt: string): Pro
   const instanceId = getClaudeInstanceId();
   await session.addMessages([
     userPeer.message(prompt, {
-      instance_id: instanceId || undefined,
-      session_affinity: sessionName,
+      metadata: {
+        instance_id: instanceId || undefined,
+        session_affinity: sessionName,
+      }
     }),
   ]);
 }
@@ -230,29 +232,28 @@ async function fetchFreshContext(config: any, cwd: string, prompt: string): Prom
   const sessionName = getSessionName(cwd);
 
   // Get peer using new fluent API
-  const userPeer = await honcho.peer(config.peerName);
+  const session = await honcho.session(sessionName);
 
   const contextParts: string[] = [];
 
-  // Only use context() here - it's free/cheap and returns pre-computed knowledge
-  // Skip chat() ($0.03 per call) - only use at session-start
+  // Only use context() here - it's free and returns pre-computed knowledge
+  // Skip chat() - only use at session-start
   const startTime = Date.now();
 
   // Extract meaningful topics instead of crude truncation
   const topics = extractTopics(prompt);
   const searchQuery = topics.length > 0 ? topics.join(' ') : prompt.slice(0, 200);
 
-  // New SDK uses peer.context() instead of peers.getContext()
-  const contextResult = await userPeer.context({
+  const contextResult = await session.context({
     searchQuery,
-    searchTopK: 10,
-    searchMaxDistance: 0.7,
-    maxObservations: 15,
-    includeMostDerived: true,
-    sessionName,  // SESSION-SCOPED for relevance
+    representationOptions: {
+      searchTopK: 10,
+      searchMaxDistance: 0.7,
+      maxConclusions: 15,
+    },
   });
 
-  logApiCall("peer.context", "GET", `search query`, Date.now() - startTime, true);
+  logApiCall("session.context", "GET", `search query`, Date.now() - startTime, true);
 
   if (contextResult) {
     setCachedUserContext(contextResult); // Update cache

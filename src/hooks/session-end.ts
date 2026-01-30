@@ -238,8 +238,10 @@ export async function handleSessionEnd(): Promise<void> {
         logApiCall("session.addMessages", "POST", `${validMessages.length} queued user messages`);
         const userMessages = validMessages.map((msg) =>
           userPeer.message(msg.content, {
-            instance_id: msg.instanceId || undefined,
-            session_affinity: sessionName,
+            metadata: {
+              instance_id: msg.instanceId || undefined,
+              session_affinity: sessionName,
+            },
           })
         );
         await session.addMessages(userMessages);
@@ -275,10 +277,12 @@ export async function handleSessionEnd(): Promise<void> {
 
         const messagesToSend = assistantMessages.map((msg) =>
           claudePeer.message(msg.content, {
-            instance_id: instanceId || undefined,
-            type: msg.isMeaningful ? 'assistant_prose' : 'assistant_brief',
-            meaningful: msg.isMeaningful || false,
-            session_affinity: sessionName,
+            metadata: {
+              instance_id: instanceId || undefined,
+              type: msg.isMeaningful ? 'assistant_prose' : 'assistant_brief',
+              meaningful: msg.isMeaningful || false,
+              session_affinity: sessionName,
+            },
           })
         );
 
@@ -317,8 +321,10 @@ export async function handleSessionEnd(): Promise<void> {
       claudePeer.message(
         `[Session ended] Reason: ${reason}, Messages: ${transcriptMessages.length}, Time: ${new Date().toISOString()}`,
         {
-          instance_id: instanceId || undefined,
-          session_affinity: sessionName,
+          metadata: {
+            instance_id: instanceId || undefined,
+            session_affinity: sessionName,
+          },
         }
       ),
     ]);

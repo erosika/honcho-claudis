@@ -156,9 +156,11 @@ export async function handleStop(): Promise<void> {
 
     await session.addMessages([
       claudePeer.message(lastMessage.slice(0, 3000), {
-        instance_id: instanceId || undefined,
-        type: "assistant_response",
-        session_affinity: sessionName,
+        metadata: {
+          instance_id: instanceId || undefined,
+          type: "assistant_response",
+          session_affinity: sessionName,
+        },
       }),
     ]);
 

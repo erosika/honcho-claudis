@@ -95,7 +95,7 @@ End of session → messages uploaded → [Honcho generates summary] → sessions
 **What it does**: Ask Honcho's LLM to synthesize insights about user/AI
 
 **Honcho endpoints used**:
-- `peers.chat(workspace, eri, {query: "What is eri working on?", session_id})` - LLM query ($0.03)
+- `peers.chat(workspace, eri, {query: "What is eri working on?", session_id})` - LLM query
 
 **Data flow**:
 ```
@@ -193,18 +193,6 @@ Session start → captureGitState() → compare to cached state → detect chang
 
 **Init shortcut**: Type `local` as API key during `honcho init` to configure for local instance
 
-### Endpoint Cost Summary
-
-| Feature | Endpoint | Cost | Frequency |
-|---------|----------|------|-----------|
-| User Memory | `peers.getContext` | FREE | Every session start |
-| AI Self-Awareness | `peers.getContext` | FREE | Every session start |
-| Session Summaries | `sessions.summaries` | FREE | Every session start |
-| Dialectic Chat | `peers.chat` | $0.03 | 2x per session start |
-| Message Upload | `messages.create` | ~$0.001/msg | Every prompt + tool use |
-| Handoff | `messages.list` | FREE | On demand |
-| Handoff | `sessions.getContext` | FREE | On demand |
-
 ### What Happens When (Practical Walkthrough)
 
 #### Starting Claude Code in a project:
@@ -223,8 +211,8 @@ You: $ claude
 │ 1. Read local config (~/.honcho/config.json)                       │
 │ 2. Get/create workspace ID (cached or API call)                    │
 │ 3. Get/create session ID based on current directory                │
-│ 4. Get/create peer IDs (user + claude)                              │
-│ 5. Configure observation: claude observes user                      │
+│ 4. Get/create peer IDs (user + claude)                             │
+│ 5. Configure observation: claude observes user                     │
 └────────────────────────────────────────────────────────────────────┘
      │
      ▼
@@ -232,10 +220,10 @@ You: $ claude
 │ PARALLEL API CALLS (all at once for speed):                        │
 │                                                                    │
 │ • peers.getContext(user)   → Facts about you                       │
-│ • peers.getContext(claude)  → AI's self-knowledge                   │
+│ • peers.getContext(claude)  → AI's self-knowledge                  │
 │ • sessions.summaries()     → What you worked on before             │
-│ • peers.chat(user)         → "What does eri care about?" ($0.03)   │
-│ • peers.chat(claude)        → "What should I remember?" ($0.03)     │
+│ • peers.chat(user)         → "What does eri care about?"           │
+│ • peers.chat(claude)        → "What should I remember?"            │
 └────────────────────────────────────────────────────────────────────┘
      │
      ▼
@@ -425,8 +413,8 @@ Workspace
     ├─► peers.getContext(user)
     ├─► peers.getContext(claude)
     ├─► sessions.summaries()
-    ├─► peers.chat(user, {query: "...on branch X..."})    # $0.03
-    └─► peers.chat(claude, {query: "...on branch X..."})   # $0.03
+    ├─► peers.chat(user, {query: "...on branch X..."})
+    └─► peers.chat(claude, {query: "...on branch X..."})
 [16] setCachedUserContext()         → Write context-cache.json
 [17] setCachedClaudeContext()        → Write context-cache.json
 [18] displayHonchoStartup()         → Show pixel art banner
@@ -516,8 +504,8 @@ Workspace
     ├─► peers.getContext(user)      → Full user context
     ├─► peers.getContext(claude)     → Full AI context
     ├─► sessions.summaries()        → Session summaries
-    ├─► peers.chat(user)            → Fresh dialectic about user ($0.03)
-    └─► peers.chat(claude)           → Fresh dialectic about AI ($0.03)
+    ├─► peers.chat(user)            → Fresh dialectic about user
+    └─► peers.chat(claude)           → Fresh dialectic about AI
 [6] formatMemoryCard()              → Build "HONCHO MEMORY ANCHOR" block
 [7] spinner.stop()                  → Show "memory anchored"
 [8] console.log(memoryCard)         → Output anchor block (marked with PRESERVE tags)
@@ -554,12 +542,10 @@ workspaces.sessions.peers.set(workspaceId, sessionId, { [peerId]: config })
 workspaces.peers.getContext(workspaceId, peerId, options)
     │
     └──► Returns: { peer_card, representation: {explicit, deductive} }
-         Cost: FREE (pre-computed)
 
 workspaces.peers.chat(workspaceId, peerId, {query, session_id})
     │
     └──► Returns: { content: string }
-         Cost: $0.03 per call (LLM invocation)
          Only used in session-start
 
 workspaces.sessions.summaries(workspaceId, sessionId)
@@ -569,7 +555,6 @@ workspaces.sessions.summaries(workspaceId, sessionId)
 workspaces.sessions.messages.create(workspaceId, sessionId, {messages})
     │
     └──► Uploads messages for knowledge extraction
-         Cost: $0.001 per message
 ```
 
 ---
@@ -928,13 +913,11 @@ cat ~/.claude/settings.json | jq '.hooks'
 
 4. **Dual peer model**: User peer observes self (builds knowledge about user), claude peer observes user (builds AI self-awareness).
 
-5. **Cost optimization**: `getContext()` is free, `chat()` costs $0.03. Only use `chat()` at session-start and pre-compact, use cached/free APIs during session.
+5. **Instance isolation**: Parallel Claude sessions in the same directory are tracked via `instance_id` in message metadata.
 
-6. **Instance isolation**: Parallel Claude sessions in the same directory are tracked via `instance_id` in message metadata.
+6. **Pre-compact strategy**: When context window fills, inject a "memory anchor" block with PRESERVE tags to survive summarization.
 
-7. **Pre-compact strategy**: When context window fills, inject a "memory anchor" block with PRESERVE tags to survive summarization.
-
-8. **Remaining risk**: Cache file race conditions can still lose data under concurrent hook access (non-atomic read-modify-write).
+7. **Remaining risk**: Cache file race conditions can still lose data under concurrent hook access (non-atomic read-modify-write).
 
 ---
 

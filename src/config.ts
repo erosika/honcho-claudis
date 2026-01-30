@@ -11,7 +11,7 @@ export interface MessageUploadConfig {
 export interface ContextRefreshConfig {
   messageThreshold?: number; // Refresh every N messages (default: 50)
   ttlSeconds?: number; // Cache TTL in seconds (default: 300)
-  skipDialectic?: boolean; // Skip chat() calls in user-prompt (default: true, saves $0.03/call)
+  skipDialectic?: boolean; // Skip chat() calls in user-prompt (default: true)
 }
 
 export interface LocalContextConfig {
@@ -132,7 +132,7 @@ export function getContextRefreshConfig(): ContextRefreshConfig {
   return {
     messageThreshold: config?.contextRefresh?.messageThreshold ?? 30, // Every 30 messages
     ttlSeconds: config?.contextRefresh?.ttlSeconds ?? 300, // 5 minutes
-    skipDialectic: config?.contextRefresh?.skipDialectic ?? true, // Skip by default to save $0.03/call
+    skipDialectic: config?.contextRefresh?.skipDialectic ?? false, // Dialectic enabled by default
   };
 }
 
